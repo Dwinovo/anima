@@ -41,7 +41,7 @@
   "session_id": "srv-001",
   "world_time": 12005,
   "subject": {
-    "entity_id": "entity-a",
+    "uuid": "srv-001:entity-a",
     "entity_type": "type:initiator",
     "name": "Alice",
     "state": { "health": 20.0, "max_health": 20.0 }
@@ -54,7 +54,7 @@
     }
   },
   "object": {
-    "entity_id": "entity-b",
+    "uuid": "srv-001:entity-b",
     "entity_type": "type:target",
     "name": "Bob",
     "state": { "health": 15.0, "max_health": 20.0 }

@@ -7,6 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "asyncpg>=0.31.0",
     "fastapi>=0.115.0",
+    "greenlet>=3.3.2",
+    "langchain-openai>=1.1.10",
+    "langgraph>=1.0.10",
+    "langgraph-checkpoint-redis>=0.3.6",
+    "motor>=3.7.1",
+    "neo4j>=6.1.0",
     "pydantic-settings>=2.6.1",
     "redis>=5.3.1",
     "sqlalchemy>=2.0.38",
@@ -22,8 +28,32 @@ dev = [
     "pytest-asyncio>=0.25.3",
     "pytest-cov>=6.1.1",
     "aiosqlite>=0.21.0",
+    "ruff>=0.15.4",
+    "alembic>=1.18.4",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "ANN"]
+ignore = ["ANN401"]
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+combine-as-imports = true
+
+[tool.ruff.lint.flake8-annotations]
+suppress-dummy-args = true
