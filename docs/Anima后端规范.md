@@ -237,6 +237,7 @@ anima:auth:refresh_index:{session_id}:{agent_id}
 
 - 服务端负责“信息整理”，不负责替客户端做动作决策
 - Context 接口不返回 Agent Profile 文本
+- 客户端在将 Context 喂给模型前，应执行 UUID 别名化；原始 ID 仅用于协议还原与上报
 
 ## 10. Gatekeeper 规范
 
