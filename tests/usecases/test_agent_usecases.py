@@ -62,6 +62,7 @@ class InMemoryPresenceRepository:
     def __init__(self) -> None:
         """初始化对象并注入所需依赖。"""
         self._active: dict[str, set[str]] = {}
+        self._heartbeat: dict[tuple[str, str], int] = {}
 
     async def is_active(self, *, session_id: str, agent_id: str) -> bool:
         """判断实体是否在线。"""
@@ -84,6 +85,20 @@ class InMemoryPresenceRepository:
         """取消实体在线状态。"""
         active = self._active.setdefault(session_id, set())
         active.discard(agent_id)
+
+    async def touch_heartbeat(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        ttl_seconds: int,
+    ) -> None:
+        """刷新心跳 TTL。"""
+        self._heartbeat[(session_id, agent_id)] = ttl_seconds
+
+    async def clear_heartbeat(self, *, session_id: str, agent_id: str) -> None:
+        """清理心跳键。"""
+        self._heartbeat.pop((session_id, agent_id), None)
 
 
 class InMemoryProfileRepository:
@@ -141,6 +156,108 @@ class InMemoryProfileRepository:
         self._display_name_index.pop(key, None)
 
 
+class InMemoryAuthStateRepository:
+    """鉴权状态仓储测试替身。"""
+
+    def __init__(self) -> None:
+        """初始化对象并注入所需依赖。"""
+        self._token_versions: dict[tuple[str, str], int] = {}
+        self._refresh_tokens: dict[tuple[str, str], set[str]] = {}
+
+    async def ensure_token_version(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        initial_version: int = 1,
+    ) -> int:
+        """确保 token_version 存在并返回当前值。"""
+        key = (session_id, agent_id)
+        current = self._token_versions.get(key)
+        if current is None:
+            self._token_versions[key] = initial_version
+            return initial_version
+        return current
+
+    async def get_token_version(self, *, session_id: str, agent_id: str) -> int | None:
+        """读取 token_version。"""
+        return self._token_versions.get((session_id, agent_id))
+
+    async def bump_token_version(self, *, session_id: str, agent_id: str) -> int:
+        """提升 token_version。"""
+        key = (session_id, agent_id)
+        next_value = self._token_versions.get(key, 0) + 1
+        self._token_versions[key] = next_value
+        return next_value
+
+    async def store_refresh_jti(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        refresh_jti: str,
+        ttl_seconds: int,
+    ) -> None:
+        """存储 refresh_jti。"""
+        _ = ttl_seconds
+        key = (session_id, agent_id)
+        existing = self._refresh_tokens.setdefault(key, set())
+        existing.add(refresh_jti)
+
+    async def consume_refresh_jti(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        refresh_jti: str,
+    ) -> bool:
+        """消费 refresh_jti。"""
+        key = (session_id, agent_id)
+        existing = self._refresh_tokens.setdefault(key, set())
+        if refresh_jti not in existing:
+            return False
+        existing.remove(refresh_jti)
+        return True
+
+    async def revoke_all_refresh_jti(self, *, session_id: str, agent_id: str) -> None:
+        """撤销全部 refresh_jti。"""
+        self._refresh_tokens[(session_id, agent_id)] = set()
+
+
+class FakeAgentTokenService:
+    """Token 服务测试替身。"""
+
+    access_token_ttl_seconds = 900
+    refresh_token_ttl_seconds = 604800
+    _refresh_counter = 0
+
+    async def issue_access_token(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        token_version: int,
+    ) -> str:
+        """签发 access token。"""
+        return f"access::{session_id}::{agent_id}::{token_version}"
+
+    async def issue_refresh_token(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        token_version: int,
+        refresh_jti: str,
+    ) -> str:
+        """签发 refresh token。"""
+        return f"refresh::{session_id}::{agent_id}::{token_version}::{refresh_jti}"
+
+    async def generate_refresh_jti(self) -> str:
+        """生成 refresh_jti。"""
+        self._refresh_counter += 1
+        return f"jti_{self._refresh_counter}"
+
+
 @pytest.mark.asyncio
 async def test_register_agent_usecase_registers_presence_and_profile() -> None:
     """验证注册成功时会写入在线状态与画像缓存。"""
@@ -152,7 +269,9 @@ async def test_register_agent_usecase_registers_presence_and_profile() -> None:
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    auth_repo = InMemoryAuthStateRepository()
+    token_service = FakeAgentTokenService()
+    usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo, auth_repo, token_service)
 
     result = await usecase.execute(
         session_id="session_demo",
@@ -169,12 +288,18 @@ async def test_register_agent_usecase_registers_presence_and_profile() -> None:
     assert len(result.display_name.split("#", maxsplit=1)[1]) == 5
     assert result.display_name.split("#", maxsplit=1)[1].isdigit()
     assert result.active is True
+    assert result.token_type == "Bearer"
+    assert result.access_token is not None
+    assert result.access_token.startswith("access::")
+    assert result.refresh_token is not None
+    assert result.refresh_token.startswith("refresh::")
+    assert result.access_token_expires_in == 900
+    assert result.refresh_token_expires_in == 604800
     stored = await profile_repo.get(session_id="session_demo", agent_id=result.agent_id)
     assert stored is not None
     assert json.loads(stored) == {
         "name": "Alice",
         "display_name": result.display_name,
-        "active": True,
         "profile": "我是一个观察者",
     }
     assert await presence_repo.is_active(session_id="session_demo", agent_id=result.agent_id) is True
@@ -192,7 +317,13 @@ async def test_register_agent_usecase_raises_when_quota_exceeded() -> None:
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
     await presence_repo.activate(session_id="session_demo", agent_id="existing")
-    usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    usecase = RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        InMemoryAuthStateRepository(),
+        FakeAgentTokenService(),
+    )
 
     with pytest.raises(QuotaExceededException):
         await usecase.execute(
@@ -209,6 +340,8 @@ async def test_register_agent_usecase_raises_when_session_missing() -> None:
         InMemorySessionRepository(),
         InMemoryPresenceRepository(),
         InMemoryProfileRepository(),
+        InMemoryAuthStateRepository(),
+        FakeAgentTokenService(),
     )
 
     with pytest.raises(SessionNotFoundException):
@@ -230,7 +363,13 @@ async def test_get_agent_usecase_returns_agent_detail() -> None:
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    register_usecase = RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        InMemoryAuthStateRepository(),
+        FakeAgentTokenService(),
+    )
     registered = await register_usecase.execute(
         session_id="session_demo",
         name="Alice",
@@ -257,7 +396,13 @@ async def test_patch_agent_usecase_updates_name_and_display_name() -> None:
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    register_usecase = RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        InMemoryAuthStateRepository(),
+        FakeAgentTokenService(),
+    )
     registered = await register_usecase.execute(
         session_id="session_demo",
         name="Alice",
@@ -287,13 +432,20 @@ async def test_unregister_agent_usecase_removes_presence_and_profile() -> None:
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    auth_repo = InMemoryAuthStateRepository()
+    register_usecase = RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        auth_repo,
+        FakeAgentTokenService(),
+    )
     registered = await register_usecase.execute(
         session_id="session_demo",
         name="Alice",
         profile="router",
     )
-    usecase = UnregisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    usecase = UnregisterAgentUseCase(session_repo, presence_repo, profile_repo, auth_repo)
 
     result = await usecase.execute(session_id="session_demo", agent_id=registered.agent_id)
 
@@ -303,6 +455,7 @@ async def test_unregister_agent_usecase_removes_presence_and_profile() -> None:
     assert result.active is False
     assert await presence_repo.is_active(session_id="session_demo", agent_id=registered.agent_id) is False
     assert await profile_repo.get(session_id="session_demo", agent_id=registered.agent_id) is None
+    assert await auth_repo.get_token_version(session_id="session_demo", agent_id=registered.agent_id) == 2
 
 
 @pytest.mark.asyncio
@@ -318,6 +471,7 @@ async def test_unregister_agent_usecase_raises_when_agent_missing() -> None:
         session_repo,
         InMemoryPresenceRepository(),
         InMemoryProfileRepository(),
+        InMemoryAuthStateRepository(),
     )
 
     with pytest.raises(AgentNotFoundException):
@@ -331,6 +485,7 @@ async def test_unregister_agent_usecase_raises_when_session_missing() -> None:
         InMemorySessionRepository(),
         InMemoryPresenceRepository(),
         InMemoryProfileRepository(),
+        InMemoryAuthStateRepository(),
     )
 
     with pytest.raises(SessionNotFoundException):

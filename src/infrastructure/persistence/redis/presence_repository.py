@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from src.domain.agent.presence_repository import AgentPresenceRepository
 from src.infrastructure.persistence.redis.client import RedisClient
-from src.infrastructure.persistence.redis.keys import active_agents_key
+from src.infrastructure.persistence.redis.keys import active_agents_key, heartbeat_key
 
 
 class RedisPresenceRepository(AgentPresenceRepository):
@@ -31,3 +31,21 @@ class RedisPresenceRepository(AgentPresenceRepository):
     async def deactivate(self, *, session_id: str, agent_id: str) -> None:
         """让某一个Agent不活跃"""
         await self._client.remove_set_member(active_agents_key(session_id), agent_id)
+
+    async def touch_heartbeat(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        ttl_seconds: int,
+    ) -> None:
+        """刷新 Agent 心跳 TTL。"""
+        await self._client.set_value(
+            heartbeat_key(session_id, agent_id),
+            "1",
+            ttl_seconds=ttl_seconds,
+        )
+
+    async def clear_heartbeat(self, *, session_id: str, agent_id: str) -> None:
+        """清理 Agent 心跳键。"""
+        await self._client.delete_key(heartbeat_key(session_id, agent_id))

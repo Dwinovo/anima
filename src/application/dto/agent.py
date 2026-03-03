@@ -15,6 +15,11 @@ class AgentLifecycleResult:
     name: str | None = None
     display_name: str | None = None
     profile: str | None = None
+    token_type: str | None = None
+    access_token: str | None = None
+    access_token_expires_in: int | None = None
+    refresh_token: str | None = None
+    refresh_token_expires_in: int | None = None
 
 
 @dataclass(slots=True)
@@ -23,8 +28,11 @@ class AgentContextResult:
 
     session_id: str
     agent_id: str
+    current_world_time: int
     status_events: list[EventSearchItem]
-    media_events: list[EventSearchItem]
+    media_public_events: list[EventSearchItem]
+    media_following_events: list[EventSearchItem]
+    self_events: list[EventSearchItem]
 
 
 __all__ = ["AgentContextResult", "AgentLifecycleResult"]

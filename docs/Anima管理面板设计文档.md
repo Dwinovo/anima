@@ -38,7 +38,7 @@
 管理面板只使用以下字段：
 
 - `session_id`（创建时必填，字符串 UUID/业务 ID）
-- `description`（创建时必填）
+- `description`（后端可选，管理面板可按产品策略要求必填）
 - `max_agents_limit`（创建时必填，正整数）
 
 说明：
@@ -152,6 +152,8 @@ export type SessionEventItem = {
   subject_uuid: string
   target_ref: string
   details: Record<string, unknown>
+  schema_version: number
+  is_social: boolean
 }
 ```
 

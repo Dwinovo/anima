@@ -68,4 +68,28 @@ class AgentPatchRequest(BaseModel):
     )
 
 
-__all__ = ["AgentPatchRequest", "AgentRegisterRequest"]
+class AgentTokenRefreshRequest(BaseModel):
+    """刷新 Agent Token 请求体。"""
+
+    refresh_token: str = Field(
+        ...,
+        min_length=1,
+        description="用于刷新 access token 的 refresh token。",
+        examples=["<REFRESH_TOKEN>"],
+    )
+
+    @field_validator("refresh_token")
+    @classmethod
+    def _validate_refresh_token(cls, value: str) -> str:
+        """校验 refresh token 非空。"""
+        if not value:
+            raise ValueError("refresh_token 不能为空。")
+        return value
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+
+__all__ = ["AgentPatchRequest", "AgentRegisterRequest", "AgentTokenRefreshRequest"]

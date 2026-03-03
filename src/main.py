@@ -20,6 +20,7 @@ from src.infrastructure.persistence.postgres.database import create_engine, crea
 
 # Redis
 from src.infrastructure.persistence.redis.client import RedisClient
+from src.infrastructure.security.hmac_token_service import HmacTokenService
 from src.presentation.api.exception_handlers import (
     anima_exception_handler,
     http_exception_handler,
@@ -33,6 +34,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """管理应用生命周期内的资源初始化与释放。"""
     # 1) Redis（单例）
     app.state.redis = RedisClient.from_url(settings.redis_url)
+    app.state.token_service = HmacTokenService(
+        secret=settings.auth_token_secret,
+        access_token_ttl_seconds=settings.auth_access_token_ttl_seconds,
+        refresh_token_ttl_seconds=settings.auth_refresh_token_ttl_seconds,
+    )
 
     # 2) Mongo（单例）
     app.state.mongo = MongoManager(settings.mongo_url, settings.mongo_database)

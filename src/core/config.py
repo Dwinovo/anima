@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     cors_allow_headers: str = "*"
     cors_allow_credentials: bool = False
 
+    # --------------------------------------------
+    # Auth
+    # --------------------------------------------
+    auth_token_secret: str = "change_me_in_env"
+    auth_access_token_ttl_seconds: int = 900
+    auth_refresh_token_ttl_seconds: int = 604800
+
     @staticmethod
     def _parse_csv_values(value: str) -> list[str]:
         """解析逗号分隔配置并返回去重前的有序列表。"""

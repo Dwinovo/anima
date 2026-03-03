@@ -4,10 +4,13 @@ from fastapi import APIRouter, Depends
 
 from src.application.usecases.event.list_session_events import ListSessionEventsUseCase
 from src.application.usecases.event.report_event import ReportEventUseCase
+from src.core.exceptions import AuthorizationDeniedException
+from src.domain.agent.token_service import TokenClaims
 from src.presentation.api.constants.http_status import EVENT_ACCEPTED, HTTP_200_OK
 from src.presentation.api.dependencies import (
     get_list_session_events_usecase,
     get_report_event_usecase,
+    require_session_access_claims,
 )
 from src.presentation.api.schemas.requests.event import EventListQuery, EventReportRequest
 from src.presentation.api.schemas.responses.envelope import ApiResponse
@@ -72,9 +75,12 @@ async def list_session_events(
 async def report_event(
     session_id: str,
     payload: EventReportRequest,
+    claims: TokenClaims = Depends(require_session_access_claims),
     usecase: ReportEventUseCase = Depends(get_report_event_usecase),
 ) -> ApiResponse[EventReportData]:
     """上报事件并触发骨肉双写。"""
+    if claims.agent_id != payload.subject_uuid:
+        raise AuthorizationDeniedException("Token subject does not match subject_uuid.")
     result = await usecase.execute(
         session_id=session_id,
         world_time=payload.world_time,

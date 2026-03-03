@@ -60,3 +60,23 @@ class DisplayNameAllocationException(AnimaException):
             code=40901,
             message=f"Unable to allocate display name for '{name}' in session {session_id}.",
         )
+
+
+class AuthenticationFailedException(AnimaException):
+    def __init__(self, message: str = "Authentication failed.") -> None:
+        """初始化对象并注入所需依赖。"""
+        super().__init__(
+            status_code=401,
+            code=40101,
+            message=message,
+        )
+
+
+class AuthorizationDeniedException(AnimaException):
+    def __init__(self, message: str = "Permission denied.") -> None:
+        """初始化对象并注入所需依赖。"""
+        super().__init__(
+            status_code=403,
+            code=40302,
+            message=message,
+        )

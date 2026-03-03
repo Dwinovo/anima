@@ -55,9 +55,24 @@ class RedisClient:
             return value.decode("utf-8")
         return str(value)
 
+    async def get_and_delete(self, key: str) -> str | None:
+        """原子读取并删除字符串键。"""
+        value = await self._redis.getdel(key)
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return str(value)
+
     async def delete_key(self, key: str) -> int:
         """删除指定键并返回删除数量。"""
         return int(await self._redis.delete(key))
+
+    async def delete_keys(self, keys: list[str]) -> int:
+        """批量删除键并返回删除数量。"""
+        if not keys:
+            return 0
+        return int(await self._redis.delete(*keys))
 
     async def add_set_member(self, key: str, member: str) -> int:
         """向 Set 集合添加成员并返回新增数量。"""

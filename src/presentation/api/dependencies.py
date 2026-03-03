@@ -3,13 +3,15 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import TypeVar, cast
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from neo4j import AsyncDriver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.application.usecases.agent.get_agent import GetAgentUseCase
 from src.application.usecases.agent.get_agent_context import GetAgentContextUseCase
+from src.application.usecases.agent.maintain_presence import MaintainAgentPresenceUseCase
 from src.application.usecases.agent.patch_agent import PatchAgentUseCase
+from src.application.usecases.agent.refresh_agent_tokens import RefreshAgentTokensUseCase
 from src.application.usecases.agent.register_agent import RegisterAgentUseCase
 from src.application.usecases.agent.unregister_agent import UnregisterAgentUseCase
 from src.application.usecases.event.list_session_events import ListSessionEventsUseCase
@@ -21,8 +23,11 @@ from src.application.usecases.session.list_sessions import (
     ListSessionsUseCase,
 )
 from src.application.usecases.session.patch_session import PatchSessionUseCase
+from src.core.exceptions import AuthenticationFailedException
+from src.domain.agent.auth_state_repository import AgentAuthStateRepository
 from src.domain.agent.presence_repository import AgentPresenceRepository
 from src.domain.agent.profile_repository import AgentProfileRepository
+from src.domain.agent.token_service import AgentTokenService, TokenClaims
 from src.domain.memory.event_payload_repository import EventPayloadRepository
 from src.domain.memory.graph_event_repository import GraphEventRepository
 from src.domain.session.repository import SessionRepository
@@ -36,6 +41,9 @@ from src.infrastructure.persistence.neo4j.graph_event_repository import (
 )
 from src.infrastructure.persistence.postgres.database import get_session
 from src.infrastructure.persistence.postgres.repositories.session_repository import PostgresSessionRepository
+from src.infrastructure.persistence.redis.auth_state_repository import (
+    RedisAuthStateRepository,
+)
 from src.infrastructure.persistence.redis.client import RedisClient
 from src.infrastructure.persistence.redis.presence_repository import (
     RedisPresenceRepository,
@@ -75,6 +83,18 @@ def get_profile_repo(
 ) -> AgentProfileRepository:
     """构建画像仓储（请求级）。"""
     return RedisProfileRepository(client)
+
+
+def get_auth_state_repo(
+    client: RedisClient = Depends(get_redis_client),
+) -> AgentAuthStateRepository:
+    """构建鉴权状态仓储（请求级）。"""
+    return RedisAuthStateRepository(client)
+
+
+def get_token_service(request: Request) -> AgentTokenService:
+    """获取 Token 服务（应用级单例）。"""
+    return _get_app_state(request, "token_service")
 
 
 # -----------------------------------------------------------------------------
@@ -158,18 +178,27 @@ def get_register_agent_usecase(
     session_repo: SessionRepository = Depends(get_session_repo),
     presence_repo: AgentPresenceRepository = Depends(get_presence_repo),
     profile_repo: AgentProfileRepository = Depends(get_profile_repo),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
+    token_service: AgentTokenService = Depends(get_token_service),
 ) -> RegisterAgentUseCase:
     """构建注册 Agent 用例。"""
-    return RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    return RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        auth_state_repo,
+        token_service,
+    )
 
 
 def get_unregister_agent_usecase(
     session_repo: SessionRepository = Depends(get_session_repo),
     presence_repo: AgentPresenceRepository = Depends(get_presence_repo),
     profile_repo: AgentProfileRepository = Depends(get_profile_repo),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
 ) -> UnregisterAgentUseCase:
     """构建卸载 Agent 用例。"""
-    return UnregisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    return UnregisterAgentUseCase(session_repo, presence_repo, profile_repo, auth_state_repo)
 
 
 def get_get_agent_usecase(
@@ -188,6 +217,31 @@ def get_patch_agent_usecase(
 ) -> PatchAgentUseCase:
     """构建编辑 Agent 用例。"""
     return PatchAgentUseCase(session_repo, presence_repo, profile_repo)
+
+
+def get_maintain_agent_presence_usecase(
+    session_repo: SessionRepository = Depends(get_session_repo),
+    presence_repo: AgentPresenceRepository = Depends(get_presence_repo),
+    profile_repo: AgentProfileRepository = Depends(get_profile_repo),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
+) -> MaintainAgentPresenceUseCase:
+    """构建 Agent 在线心跳维护用例。"""
+    return MaintainAgentPresenceUseCase(session_repo, profile_repo, presence_repo, auth_state_repo)
+
+
+def get_refresh_agent_tokens_usecase(
+    session_repo: SessionRepository = Depends(get_session_repo),
+    profile_repo: AgentProfileRepository = Depends(get_profile_repo),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
+    token_service: AgentTokenService = Depends(get_token_service),
+) -> RefreshAgentTokensUseCase:
+    """构建刷新 Agent Token 用例。"""
+    return RefreshAgentTokensUseCase(
+        session_repo,
+        profile_repo,
+        auth_state_repo,
+        token_service,
+    )
 
 
 def get_neo4j_manager(request: Request) -> Neo4jManager:
@@ -242,4 +296,96 @@ def get_agent_context_usecase(
         profile_repo,
         event_payload_repo,
         graph_event_repo,
+    )
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    """从 Authorization 请求头提取 Bearer Token。"""
+    if authorization is None:
+        raise AuthenticationFailedException("Missing Authorization header.")
+    prefix = "Bearer "
+    if not authorization.startswith(prefix):
+        raise AuthenticationFailedException("Authorization must be Bearer token.")
+    token = authorization[len(prefix) :].strip()
+    if not token:
+        raise AuthenticationFailedException("Empty bearer token.")
+    return token
+
+
+async def _validate_access_claims(
+    *,
+    token: str,
+    session_id: str,
+    expected_agent_id: str | None,
+    token_service: AgentTokenService,
+    auth_state_repo: AgentAuthStateRepository,
+) -> TokenClaims:
+    """解析并校验 access token 与 Redis token_version。"""
+    claims = await token_service.parse_token(token=token)
+    if claims.token_type != "access":
+        raise AuthenticationFailedException("Access token required.")
+    if claims.session_id != session_id:
+        raise AuthenticationFailedException("Token session mismatch.")
+    if expected_agent_id is not None and claims.agent_id != expected_agent_id:
+        raise AuthenticationFailedException("Token subject mismatch.")
+    current_version = await auth_state_repo.ensure_token_version(
+        session_id=session_id,
+        agent_id=claims.agent_id,
+        initial_version=1,
+    )
+    if claims.token_version != current_version:
+        raise AuthenticationFailedException("Token version mismatch.")
+    return claims
+
+
+async def require_agent_access_claims(
+    session_id: str,
+    agent_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    token_service: AgentTokenService = Depends(get_token_service),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
+) -> TokenClaims:
+    """校验 Agent 路径资源访问令牌并返回声明。"""
+    token = _extract_bearer_token(authorization)
+    return await _validate_access_claims(
+        token=token,
+        session_id=session_id,
+        expected_agent_id=agent_id,
+        token_service=token_service,
+        auth_state_repo=auth_state_repo,
+    )
+
+
+async def require_session_access_claims(
+    session_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    token_service: AgentTokenService = Depends(get_token_service),
+    auth_state_repo: AgentAuthStateRepository = Depends(get_auth_state_repo),
+) -> TokenClaims:
+    """校验 Session 级别访问令牌并返回声明。"""
+    token = _extract_bearer_token(authorization)
+    return await _validate_access_claims(
+        token=token,
+        session_id=session_id,
+        expected_agent_id=None,
+        token_service=token_service,
+        auth_state_repo=auth_state_repo,
+    )
+
+
+async def validate_agent_access_token(
+    *,
+    token: str,
+    session_id: str,
+    agent_id: str,
+    token_service: AgentTokenService,
+    auth_state_repo: AgentAuthStateRepository,
+) -> TokenClaims:
+    """校验 WebSocket query token。"""
+    return await _validate_access_claims(
+        token=token,
+        session_id=session_id,
+        expected_agent_id=agent_id,
+        token_service=token_service,
+        auth_state_repo=auth_state_repo,
     )

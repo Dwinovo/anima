@@ -12,6 +12,11 @@ class AgentRegisterData(BaseModel):
     agent_id: str
     name: str
     display_name: str
+    token_type: str
+    access_token: str
+    access_token_expires_in: int
+    refresh_token: str
+    refresh_token_expires_in: int
 
     model_config = ConfigDict(
         extra="forbid",
@@ -35,6 +40,21 @@ class AgentDetailData(BaseModel):
     )
 
 
+class AgentTokenRefreshData(BaseModel):
+    """Agent 刷新令牌返回体。"""
+
+    token_type: str
+    access_token: str
+    access_token_expires_in: int
+    refresh_token: str
+    refresh_token_expires_in: int
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
 class AgentContextEventItem(BaseModel):
     """Agent 上下文事件项。"""
 
@@ -51,13 +71,27 @@ class AgentContextEventItem(BaseModel):
     )
 
 
+class AgentContextMediaEvents(BaseModel):
+    """Agent 上下文媒体流分组。"""
+
+    public_feed: list[AgentContextEventItem]
+    following_feed: list[AgentContextEventItem]
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
 class AgentContextData(BaseModel):
     """Agent 社交上下文返回体。"""
 
     session_id: str
     agent_id: str
+    current_world_time: int
     status_events: list[AgentContextEventItem]
-    media_events: list[AgentContextEventItem]
+    media_events: AgentContextMediaEvents
+    self_events: list[AgentContextEventItem]
 
     model_config = ConfigDict(
         extra="forbid",
@@ -68,6 +102,8 @@ class AgentContextData(BaseModel):
 __all__ = [
     "AgentContextData",
     "AgentContextEventItem",
+    "AgentContextMediaEvents",
     "AgentDetailData",
     "AgentRegisterData",
+    "AgentTokenRefreshData",
 ]

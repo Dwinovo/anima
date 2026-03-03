@@ -10,8 +10,10 @@ from src.core.exceptions import (
     QuotaExceededException,
     SessionNotFoundException,
 )
+from src.domain.agent.auth_state_repository import AgentAuthStateRepository
 from src.domain.agent.presence_repository import AgentPresenceRepository
 from src.domain.agent.profile_repository import AgentProfileRepository
+from src.domain.agent.token_service import AgentTokenService
 from src.domain.session.repository import SessionRepository
 
 DISPLAY_NAME_SPACE_SIZE = 100000
@@ -25,11 +27,15 @@ class RegisterAgentUseCase:
         session_repo: SessionRepository,
         presence_repo: AgentPresenceRepository,
         profile_repo: AgentProfileRepository,
+        auth_state_repo: AgentAuthStateRepository,
+        token_service: AgentTokenService,
     ) -> None:
         """初始化对象并注入所需依赖。"""
         self._session_repo = session_repo
         self._presence_repo = presence_repo
         self._profile_repo = profile_repo
+        self._auth_state_repo = auth_state_repo
+        self._token_service = token_service
 
     @staticmethod
     def _suffix_seed(*, session_id: str, agent_id: str) -> int:
@@ -70,7 +76,6 @@ class RegisterAgentUseCase:
         profile_payload = {
             "name": name,
             "display_name": display_name,
-            "active": True,
             "profile": profile,
         }
         profile_json = json.dumps(profile_payload, ensure_ascii=False, separators=(",", ":"))
@@ -80,6 +85,29 @@ class RegisterAgentUseCase:
             profile_json=profile_json,
         )
         await self._presence_repo.activate(session_id=session_id, agent_id=agent_id)
+        token_version = await self._auth_state_repo.ensure_token_version(
+            session_id=session_id,
+            agent_id=agent_id,
+            initial_version=1,
+        )
+        refresh_jti = await self._token_service.generate_refresh_jti()
+        access_token = await self._token_service.issue_access_token(
+            session_id=session_id,
+            agent_id=agent_id,
+            token_version=token_version,
+        )
+        refresh_token = await self._token_service.issue_refresh_token(
+            session_id=session_id,
+            agent_id=agent_id,
+            token_version=token_version,
+            refresh_jti=refresh_jti,
+        )
+        await self._auth_state_repo.store_refresh_jti(
+            session_id=session_id,
+            agent_id=agent_id,
+            refresh_jti=refresh_jti,
+            ttl_seconds=self._token_service.refresh_token_ttl_seconds,
+        )
         return AgentLifecycleResult(
             session_id=session_id,
             agent_id=agent_id,
@@ -87,6 +115,11 @@ class RegisterAgentUseCase:
             name=name,
             display_name=display_name,
             profile=profile,
+            token_type="Bearer",
+            access_token=access_token,
+            access_token_expires_in=self._token_service.access_token_ttl_seconds,
+            refresh_token=refresh_token,
+            refresh_token_expires_in=self._token_service.refresh_token_ttl_seconds,
         )
 
     async def _allocate_unique_display_name(

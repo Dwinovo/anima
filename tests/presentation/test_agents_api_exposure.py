@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from starlette.routing import WebSocketRoute
+
 from src.main import app
 
 
@@ -36,6 +38,27 @@ def test_agent_context_api_is_exposed() -> None:
     for route in app.routes:
         methods = getattr(route, "methods", set())
         if route.path == "/api/v1/sessions/{session_id}/agents/{agent_id}/context" and "GET" in methods:
+            route_found = True
+            break
+    assert route_found is True
+
+
+def test_agent_presence_websocket_api_is_exposed() -> None:
+    """验证 Agent Presence WebSocket 接口已暴露。"""
+    route_found = False
+    for route in app.routes:
+        if isinstance(route, WebSocketRoute) and route.path == "/api/v1/sessions/{session_id}/agents/{agent_id}/presence":
+            route_found = True
+            break
+    assert route_found is True
+
+
+def test_agent_token_refresh_api_is_exposed() -> None:
+    """验证 Agent 刷新令牌接口已暴露。"""
+    route_found = False
+    for route in app.routes:
+        methods = getattr(route, "methods", set())
+        if route.path == "/api/v1/sessions/{session_id}/agents/{agent_id}/tokens/refresh" and "POST" in methods:
             route_found = True
             break
     assert route_found is True

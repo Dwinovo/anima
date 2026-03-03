@@ -72,7 +72,6 @@ class PatchAgentUseCase:
         updated_profile_payload = {
             "name": name,
             "display_name": display_name,
-            "active": is_active,
             "profile": current.get("profile"),
         }
         updated_profile_json = json.dumps(updated_profile_payload, ensure_ascii=False, separators=(",", ":"))

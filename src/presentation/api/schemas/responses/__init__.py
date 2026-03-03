@@ -1,8 +1,10 @@
 from src.presentation.api.schemas.responses.agent import (
     AgentContextData,
     AgentContextEventItem,
+    AgentContextMediaEvents,
     AgentDetailData,
     AgentRegisterData,
+    AgentTokenRefreshData,
 )
 from src.presentation.api.schemas.responses.envelope import (
     ApiResponse,
@@ -31,8 +33,10 @@ __all__ = [
     "ErrorResponse",
     "AgentContextData",
     "AgentContextEventItem",
+    "AgentContextMediaEvents",
     "AgentDetailData",
     "AgentRegisterData",
+    "AgentTokenRefreshData",
     "EventListData",
     "EventListItem",
     "EventReportData",

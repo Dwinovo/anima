@@ -7,7 +7,7 @@
 1. `Anima后端规范.md`  
    后端边界、分层规范、存储职责、DI 约束（服务端权威规范）。
 2. `Anima接口文档.md`  
-   RESTful API 契约与请求/响应示例（前后端对接主文档）。
+   RESTful API 契约与请求/响应示例（含 access/refresh 与防重放口径）。
 3. `Anima数据库迁移（Alembic）.md`  
    数据库迁移流程与 Alembic 使用规范。
 4. `Anima管理面板设计文档.md`  

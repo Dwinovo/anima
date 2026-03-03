@@ -24,3 +24,17 @@ class AgentPresenceRepository(Protocol):
     async def deactivate(self, *, session_id: str, agent_id: str) -> None:
         """将指定实体标记为离线状态。"""
         ...
+
+    async def touch_heartbeat(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        ttl_seconds: int,
+    ) -> None:
+        """刷新指定实体心跳 TTL。"""
+        ...
+
+    async def clear_heartbeat(self, *, session_id: str, agent_id: str) -> None:
+        """清理指定实体心跳键。"""
+        ...
