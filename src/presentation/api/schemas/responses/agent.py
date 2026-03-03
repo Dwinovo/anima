@@ -71,11 +71,68 @@ class AgentContextEventItem(BaseModel):
     )
 
 
-class AgentContextMediaEvents(BaseModel):
-    """Agent 上下文媒体流分组。"""
+class AgentContextEventListView(BaseModel):
+    """Agent 上下文事件流视图。"""
 
-    public_feed: list[AgentContextEventItem]
-    following_feed: list[AgentContextEventItem]
+    items: list[AgentContextEventItem]
+    next_cursor: str | None
+    has_more: bool
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
+class AgentContextHotItem(BaseModel):
+    """Agent 上下文热点项。"""
+
+    topic_ref: str
+    score: float
+    sample_event_ids: list[str]
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
+class AgentContextHotListView(BaseModel):
+    """Agent 上下文热点视图。"""
+
+    items: list[AgentContextHotItem]
+    next_cursor: str | None
+    has_more: bool
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
+class AgentContextWorldSnapshot(BaseModel):
+    """Agent 上下文世界快照。"""
+
+    online_agents: int
+    active_agents: int
+    recent_event_count: int
+    my_following_count: int
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+
+class AgentContextViews(BaseModel):
+    """Agent 上下文六视图。"""
+
+    self_recent: AgentContextEventListView
+    public_feed: AgentContextEventListView
+    following_feed: AgentContextEventListView
+    attention: AgentContextEventListView
+    hot: AgentContextHotListView
+    world_snapshot: AgentContextWorldSnapshot
 
     model_config = ConfigDict(
         extra="forbid",
@@ -89,9 +146,7 @@ class AgentContextData(BaseModel):
     session_id: str
     agent_id: str
     current_world_time: int
-    status_events: list[AgentContextEventItem]
-    media_events: AgentContextMediaEvents
-    self_events: list[AgentContextEventItem]
+    views: AgentContextViews
 
     model_config = ConfigDict(
         extra="forbid",
@@ -101,8 +156,12 @@ class AgentContextData(BaseModel):
 
 __all__ = [
     "AgentContextData",
+    "AgentContextEventListView",
     "AgentContextEventItem",
-    "AgentContextMediaEvents",
+    "AgentContextHotItem",
+    "AgentContextHotListView",
+    "AgentContextViews",
+    "AgentContextWorldSnapshot",
     "AgentDetailData",
     "AgentRegisterData",
     "AgentTokenRefreshData",

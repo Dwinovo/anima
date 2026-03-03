@@ -18,6 +18,7 @@ class SessionRepository(Protocol):
         self,
         *,
         session_id: str,
+        name: str,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -37,6 +38,7 @@ class SessionRepository(Protocol):
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> Session | None:

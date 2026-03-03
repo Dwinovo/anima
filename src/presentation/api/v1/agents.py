@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from fastapi.websockets import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from src.application.dto.event import EventSearchItem
 from src.application.usecases.agent.get_agent import GetAgentUseCase
 from src.application.usecases.agent.get_agent_context import GetAgentContextUseCase
 from src.application.usecases.agent.maintain_presence import MaintainAgentPresenceUseCase
@@ -41,7 +42,11 @@ from src.presentation.api.schemas.requests.agent import (
 from src.presentation.api.schemas.responses.agent import (
     AgentContextData,
     AgentContextEventItem,
-    AgentContextMediaEvents,
+    AgentContextEventListView,
+    AgentContextHotItem,
+    AgentContextHotListView,
+    AgentContextViews,
+    AgentContextWorldSnapshot,
     AgentDetailData,
     AgentRegisterData,
     AgentTokenRefreshData,
@@ -52,6 +57,18 @@ router = APIRouter(prefix="/sessions/{session_id}/agents", tags=["agents"])
 HEARTBEAT_INTERVAL_SECONDS = 60
 MAX_MISSED_HEARTBEATS = 3
 HEARTBEAT_TTL_SECONDS = HEARTBEAT_INTERVAL_SECONDS * MAX_MISSED_HEARTBEATS
+
+
+def _to_context_event_item(item: EventSearchItem) -> AgentContextEventItem:
+    """将领域事件 DTO 映射为接口层事件项。"""
+    return AgentContextEventItem(
+        event_id=item.event_id,
+        world_time=item.world_time,
+        verb=item.verb,
+        subject_uuid=item.subject_uuid,
+        target_ref=item.target_ref,
+        details=item.details,
+    )
 
 
 @router.post(
@@ -129,11 +146,12 @@ async def patch_agent(
     _: TokenClaims = Depends(require_agent_access_claims),
     usecase: PatchAgentUseCase = Depends(get_patch_agent_usecase),
 ) -> ApiResponse[AgentDetailData]:
-    """更新 Agent 昵称并重算展示名。"""
+    """增量更新 Agent 基础信息（name/profile）。"""
     result = await usecase.execute(
         session_id=session_id,
         agent_id=agent_id,
         name=payload.name,
+        profile=payload.profile,
     )
     return ApiResponse(
         code=0,
@@ -141,8 +159,8 @@ async def patch_agent(
         data=AgentDetailData(
             session_id=result.session_id,
             agent_id=result.agent_id,
-            name=result.name or payload.name,
-            display_name=result.display_name or payload.name,
+            name=result.name or "",
+            display_name=result.display_name or "",
             profile=result.profile,
             active=result.active,
         ),
@@ -163,49 +181,17 @@ async def get_agent_context(
 ) -> ApiResponse[AgentContextData]:
     """获取 Agent 在社交平台中的上下文事件。"""
     result = await usecase.execute(session_id=session_id, agent_id=agent_id)
-    status_events = [
-        AgentContextEventItem(
-            event_id=item.event_id,
-            world_time=item.world_time,
-            verb=item.verb,
-            subject_uuid=item.subject_uuid,
-            target_ref=item.target_ref,
-            details=item.details,
+    self_recent_items = [_to_context_event_item(item) for item in result.views.self_recent.items]
+    public_feed_items = [_to_context_event_item(item) for item in result.views.public_feed.items]
+    following_feed_items = [_to_context_event_item(item) for item in result.views.following_feed.items]
+    attention_items = [_to_context_event_item(item) for item in result.views.attention.items]
+    hot_items = [
+        AgentContextHotItem(
+            topic_ref=item.topic_ref,
+            score=item.score,
+            sample_event_ids=item.sample_event_ids,
         )
-        for item in result.status_events
-    ]
-    media_public_events = [
-        AgentContextEventItem(
-            event_id=item.event_id,
-            world_time=item.world_time,
-            verb=item.verb,
-            subject_uuid=item.subject_uuid,
-            target_ref=item.target_ref,
-            details=item.details,
-        )
-        for item in result.media_public_events
-    ]
-    media_following_events = [
-        AgentContextEventItem(
-            event_id=item.event_id,
-            world_time=item.world_time,
-            verb=item.verb,
-            subject_uuid=item.subject_uuid,
-            target_ref=item.target_ref,
-            details=item.details,
-        )
-        for item in result.media_following_events
-    ]
-    self_events = [
-        AgentContextEventItem(
-            event_id=item.event_id,
-            world_time=item.world_time,
-            verb=item.verb,
-            subject_uuid=item.subject_uuid,
-            target_ref=item.target_ref,
-            details=item.details,
-        )
-        for item in result.self_events
+        for item in result.views.hot.items
     ]
     return ApiResponse(
         code=0,
@@ -214,12 +200,39 @@ async def get_agent_context(
             session_id=result.session_id,
             agent_id=result.agent_id,
             current_world_time=result.current_world_time,
-            status_events=status_events,
-            media_events=AgentContextMediaEvents(
-                public_feed=media_public_events,
-                following_feed=media_following_events,
+            views=AgentContextViews(
+                self_recent=AgentContextEventListView(
+                    items=self_recent_items,
+                    next_cursor=result.views.self_recent.next_cursor,
+                    has_more=result.views.self_recent.has_more,
+                ),
+                public_feed=AgentContextEventListView(
+                    items=public_feed_items,
+                    next_cursor=result.views.public_feed.next_cursor,
+                    has_more=result.views.public_feed.has_more,
+                ),
+                following_feed=AgentContextEventListView(
+                    items=following_feed_items,
+                    next_cursor=result.views.following_feed.next_cursor,
+                    has_more=result.views.following_feed.has_more,
+                ),
+                attention=AgentContextEventListView(
+                    items=attention_items,
+                    next_cursor=result.views.attention.next_cursor,
+                    has_more=result.views.attention.has_more,
+                ),
+                hot=AgentContextHotListView(
+                    items=hot_items,
+                    next_cursor=result.views.hot.next_cursor,
+                    has_more=result.views.hot.has_more,
+                ),
+                world_snapshot=AgentContextWorldSnapshot(
+                    online_agents=result.views.world_snapshot.online_agents,
+                    active_agents=result.views.world_snapshot.active_agents,
+                    recent_event_count=result.views.world_snapshot.recent_event_count,
+                    my_following_count=result.views.world_snapshot.my_following_count,
+                ),
             ),
-            self_events=self_events,
         ),
     )
 

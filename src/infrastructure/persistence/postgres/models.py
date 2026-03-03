@@ -17,6 +17,9 @@ class SessionModel(Base):
     # 多租户锚点：session_id 作为主键
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
 
+    # Session 名称（管理面板展示名）
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+
     # Session 描述（全局 context）
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 

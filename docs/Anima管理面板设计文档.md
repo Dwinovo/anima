@@ -37,13 +37,13 @@
 
 管理面板只使用以下字段：
 
-- `session_id`（创建时必填，字符串 UUID/业务 ID）
+- `name`（创建时必填，Session 展示名）
 - `description`（后端可选，管理面板可按产品策略要求必填）
 - `max_agents_limit`（创建时必填，正整数）
+- `session_id`（服务端生成 UUID，创建后返回）
 
 说明：
 
-- 不再使用 `name`
 - 不再使用 `default_llm`
 - `session_id` 创建后不可编辑
 
@@ -61,18 +61,20 @@
 列表列：
 
 - `session_id`
+- `name`
 - `description`
 - `max_agents_limit`
 - 操作（查看、编辑、删除）
 
 创建弹窗字段：
 
-- `session_id`
+- `name`
 - `description`
 - `max_agents_limit`
 
 编辑弹窗字段：
 
+- `name`
 - `description`
 - `max_agents_limit`
 
@@ -81,6 +83,7 @@
 顶部信息：
 
 - `session_id`
+- `name`
 - `description`
 - `max_agents_limit`
 
@@ -94,14 +97,15 @@
 ### 5.1 创建 Session
 
 1. 打开创建弹窗
-2. 填写 `session_id/description/max_agents_limit`
+2. 填写 `name/description/max_agents_limit`
 3. 调用 `POST /api/v1/sessions`
-4. 成功后刷新列表并提示成功
+4. 从响应中读取服务端生成的 `session_id`
+5. 刷新列表并提示成功
 
 ### 5.2 编辑 Session
 
 1. 进入编辑弹窗
-2. 修改 `description/max_agents_limit`
+2. 修改 `name/description/max_agents_limit`
 3. 调用 `PATCH /api/v1/sessions/{session_id}`
 4. 成功后刷新列表与详情数据
 
@@ -122,12 +126,14 @@ export type ApiResponse<T> = {
 
 export type SessionListItem = {
   session_id: string
+  name: string
   description: string
   max_agents_limit: number
 }
 
 export type SessionDetailData = {
   session_id: string
+  name: string
   description: string
   max_agents_limit: number
   created_at: string
@@ -135,12 +141,13 @@ export type SessionDetailData = {
 }
 
 export type SessionCreatePayload = {
-  session_id: string
+  name: string
   description: string
   max_agents_limit: number
 }
 
 export type SessionPatchPayload = Partial<{
+  name: string
   description: string
   max_agents_limit: number
 }>
@@ -161,5 +168,4 @@ export type SessionEventItem = {
 
 - `400`：字段校验失败（弹窗内展示字段错误）
 - `404`：资源不存在（列表刷新或跳转空态）
-- `409`：冲突（例如 `session_id` 已存在）
 - `500`：通用错误提示 + 重试

@@ -25,6 +25,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -32,6 +33,7 @@ class InMemorySessionRepository:
         now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
+            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
             created_at=now,
@@ -54,11 +56,12 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> Session | None:
         """更新 Session。"""
-        _ = description
+        _ = (name, description)
         _ = max_agents_limit
         return self._sessions.get(session_id)
 
@@ -212,8 +215,8 @@ class InMemoryGraphRepository:
 
 
 @pytest.mark.asyncio
-async def test_get_agent_context_usecase_returns_v2_buckets() -> None:
-    """验证上下文分流为 status/public/following/self 四类。"""
+async def test_get_agent_context_usecase_returns_views_payload() -> None:
+    """验证上下文分流为 views 六视图结构。"""
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
@@ -317,10 +320,85 @@ async def test_get_agent_context_usecase_returns_v2_buckets() -> None:
     assert result.session_id == "session_demo"
     assert result.agent_id == "agent_me"
     assert result.current_world_time == 207
-    assert [item.event_id for item in result.self_events] == ["event_6", "event_3"]
-    assert [item.event_id for item in result.status_events] == ["event_7", "event_2", "event_1"]
-    assert [item.event_id for item in result.media_following_events] == ["event_5"]
-    assert [item.event_id for item in result.media_public_events] == ["event_4"]
+    assert [item.event_id for item in result.views.self_recent.items] == ["event_6", "event_3"]
+    assert [item.event_id for item in result.views.attention.items] == ["event_7", "event_2", "event_1"]
+    assert [item.event_id for item in result.views.following_feed.items] == ["event_5"]
+    assert [item.event_id for item in result.views.public_feed.items] == ["event_4"]
+    assert result.views.self_recent.next_cursor is None
+    assert result.views.self_recent.has_more is False
+    assert result.views.following_feed.next_cursor is None
+    assert result.views.following_feed.has_more is False
+    assert result.views.hot.next_cursor is None
+    assert result.views.hot.has_more is False
+    assert result.views.hot.items[0].topic_ref == "board:session_demo"
+    assert result.views.hot.items[0].score == 3.0
+    assert result.views.hot.items[0].sample_event_ids == ["event_6", "event_5", "event_4"]
+    assert result.views.world_snapshot.online_agents == 1
+    assert result.views.world_snapshot.active_agents == 1
+    assert result.views.world_snapshot.recent_event_count == 7
+    assert result.views.world_snapshot.my_following_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_agent_context_usecase_sets_has_more_and_next_cursor() -> None:
+    """验证事件类视图在超限时会返回分页标记。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_agents_limit=100,
+    )
+    presence_repo = InMemoryPresenceRepository(active_ids={"agent_me"})
+    profile_repo = InMemoryProfileRepository(existing_ids={"agent_me"})
+    payload_repo = InMemoryPayloadRepository(
+        payloads={
+            "event_3": {
+                "world_time": 203,
+                "verb": "POSTED",
+                "subject_uuid": "agent_me",
+                "target_ref": "board:session_demo",
+                "details": {"content": "3"},
+                "schema_version": 1,
+                "is_social": True,
+            },
+            "event_2": {
+                "world_time": 202,
+                "verb": "POSTED",
+                "subject_uuid": "agent_me",
+                "target_ref": "board:session_demo",
+                "details": {"content": "2"},
+                "schema_version": 1,
+                "is_social": True,
+            },
+            "event_1": {
+                "world_time": 201,
+                "verb": "POSTED",
+                "subject_uuid": "agent_me",
+                "target_ref": "board:session_demo",
+                "details": {"content": "1"},
+                "schema_version": 1,
+                "is_social": True,
+            },
+        }
+    )
+    graph_repo = InMemoryGraphRepository(event_ids=["event_3", "event_2", "event_1"])
+    usecase = GetAgentContextUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        payload_repo,
+        graph_repo,
+    )
+
+    result = await usecase.execute(
+        session_id="session_demo",
+        agent_id="agent_me",
+        limit=1,
+    )
+
+    assert [item.event_id for item in result.views.self_recent.items] == ["event_3"]
+    assert result.views.self_recent.has_more is True
+    assert result.views.self_recent.next_cursor == "203:event_3"
 
 
 @pytest.mark.asyncio

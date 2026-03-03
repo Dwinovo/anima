@@ -49,12 +49,13 @@ async def create_session(
 ) -> ApiResponse[SessionCreateData]:
     """创建资源并返回创建结果。"""
     session = await usecase.execute(
-        session_id=payload.session_id,
+        name=payload.name,
         description=payload.description,
         max_agents_limit=payload.max_agents_limit,
     )
     data = SessionCreateData(
         session_id=session.session_id,
+        name=session.name,
         description=session.description,
         max_agents_limit=session.max_agents_limit,
         created_at=session.created_at,
@@ -82,6 +83,7 @@ async def list_sessions(
     items = [
         SessionListItem(
             session_id=item.session_id,
+            name=item.name,
             description=item.description,
             max_agents_limit=item.max_agents_limit,
         )
@@ -111,6 +113,7 @@ async def get_session(
         message="success",
         data=SessionDetailData(
             session_id=session.session_id,
+            name=session.name,
             description=session.description,
             max_agents_limit=session.max_agents_limit,
             created_at=session.created_at,
@@ -133,6 +136,7 @@ async def patch_session(
     """增量更新指定 Session。"""
     session = await usecase.execute(
         session_id=session_id,
+        name=payload.name,
         description=payload.description,
         max_agents_limit=payload.max_agents_limit,
     )
@@ -141,6 +145,7 @@ async def patch_session(
         message="success",
         data=SessionDetailData(
             session_id=session.session_id,
+            name=session.name,
             description=session.description,
             max_agents_limit=session.max_agents_limit,
             created_at=session.created_at,

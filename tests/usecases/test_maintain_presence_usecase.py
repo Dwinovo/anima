@@ -24,6 +24,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -31,6 +32,7 @@ class InMemorySessionRepository:
         now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
+            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
             created_at=now,
@@ -51,11 +53,12 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> Session | None:
         """更新 Session。"""
-        _ = (description, max_agents_limit)
+        _ = (name, description, max_agents_limit)
         return self._sessions.get(session_id)
 
     async def delete(self, *, session_id: str) -> None:

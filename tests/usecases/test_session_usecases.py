@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import UUID
 
 import pytest
 
@@ -30,6 +31,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -37,6 +39,7 @@ class InMemorySessionRepository:
         now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
+            name=name,
             description=description,
             max_agents_limit=max_agents_limit,
             created_at=now,
@@ -61,6 +64,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> Session | None:
@@ -68,6 +72,8 @@ class InMemorySessionRepository:
         existing = self._sessions.get(session_id)
         if existing is None:
             return None
+        if name is not None:
+            existing.name = name
         if description is not None:
             existing.description = description
         if max_agents_limit is not None:
@@ -77,18 +83,19 @@ class InMemorySessionRepository:
 
 
 @pytest.mark.asyncio
-async def test_create_session_usecase_keeps_client_session_id() -> None:
-    """验证创建 Session 时使用客户端传入的 session_id。"""
+async def test_create_session_usecase_generates_server_side_uuid() -> None:
+    """验证创建 Session 时由服务端生成 session_id。"""
     repo = InMemorySessionRepository()
     usecase = CreateSessionUseCase(repo)
 
     created = await usecase.execute(
-        session_id="session_alpha",
+        name="Alpha Session",
         description="social world",
         max_agents_limit=100,
     )
 
-    assert created.session_id == "session_alpha"
+    UUID(created.session_id)
+    assert created.name == "Alpha Session"
     assert created.description == "social world"
     assert created.max_agents_limit == 100
 
@@ -99,6 +106,7 @@ async def test_delete_session_usecase_deletes_existing_session() -> None:
     repo = InMemorySessionRepository()
     created = await repo.create(
         session_id="session_deadbeef",
+        name="Deadbeef Session",
         description=None,
         max_agents_limit=10,
     )
@@ -125,11 +133,13 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_alpha",
+        name="Alpha Session",
         description="alpha desc",
         max_agents_limit=100,
     )
     await session_repo.create(
         session_id="session_beta",
+        name="Beta Session",
         description=None,
         max_agents_limit=50,
     )
@@ -139,9 +149,11 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
 
     assert len(result) == 2
     assert result[0].session_id == "session_alpha"
+    assert result[0].name == "Alpha Session"
     assert result[0].description == "alpha desc"
     assert result[0].max_agents_limit == 100
     assert result[1].session_id == "session_beta"
+    assert result[1].name == "Beta Session"
     assert result[1].description is None
     assert result[1].max_agents_limit == 50
 
@@ -152,6 +164,7 @@ async def test_get_session_usecase_returns_existing_session() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_alpha",
+        name="Alpha Session",
         description=None,
         max_agents_limit=100,
     )
@@ -160,6 +173,7 @@ async def test_get_session_usecase_returns_existing_session() -> None:
     result = await usecase.execute(session_id="session_alpha")
 
     assert result.session_id == "session_alpha"
+    assert result.name == "Alpha Session"
     assert result.max_agents_limit == 100
     assert result.created_at is not None
     assert result.updated_at is not None
@@ -171,6 +185,7 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_alpha",
+        name="Alpha Session",
         description=None,
         max_agents_limit=100,
     )
@@ -178,11 +193,13 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
 
     result = await usecase.execute(
         session_id="session_alpha",
+        name="Alpha Session V2",
         description="new desc",
         max_agents_limit=120,
     )
 
     assert result.session_id == "session_alpha"
+    assert result.name == "Alpha Session V2"
     assert result.description == "new desc"
     assert result.max_agents_limit == 120
 

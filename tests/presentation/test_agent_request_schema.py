@@ -34,3 +34,17 @@ def test_agent_patch_request_accepts_name() -> None:
     """验证 Agent PATCH 仅修改 name。"""
     request = AgentPatchRequest.model_validate({"name": "AliceNew"})
     assert request.name == "AliceNew"
+    assert request.profile is None
+
+
+def test_agent_patch_request_accepts_profile_only() -> None:
+    """验证 Agent PATCH 支持仅修改 profile。"""
+    request = AgentPatchRequest.model_validate({"profile": "新的名片"})
+    assert request.name is None
+    assert request.profile == "新的名片"
+
+
+def test_agent_patch_request_rejects_empty_payload() -> None:
+    """验证 Agent PATCH 空请求会被拒绝。"""
+    with pytest.raises(ValidationError):
+        AgentPatchRequest.model_validate({})

@@ -41,7 +41,14 @@ class PatchAgentUseCase:
         """根据昵称与后缀拼接展示名。"""
         return f"{name}#{suffix_number:05d}"
 
-    async def execute(self, *, session_id: str, agent_id: str, name: str) -> AgentLifecycleResult:
+    async def execute(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        name: str | None = None,
+        profile: str | None = None,
+    ) -> AgentLifecycleResult:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
         if session is None:
@@ -53,26 +60,35 @@ class PatchAgentUseCase:
             raise AgentNotFoundException(session_id=session_id, uuid=agent_id)
 
         current = self._parse_profile_payload(profile_json)
-        base_suffix = self._suffix_seed(session_id=session_id, agent_id=agent_id)
-        display_name = await self._allocate_unique_display_name(
-            session_id=session_id,
-            agent_id=agent_id,
-            name=name,
-            base_suffix=base_suffix,
-        )
+        next_name = current.get("name")
+        next_display_name = current.get("display_name")
+        next_profile = current.get("profile")
 
-        previous_display_name = current.get("display_name")
-        if previous_display_name and previous_display_name != display_name:
-            await self._profile_repo.release_display_name(
+        if name is not None:
+            base_suffix = self._suffix_seed(session_id=session_id, agent_id=agent_id)
+            allocated_display_name = await self._allocate_unique_display_name(
                 session_id=session_id,
                 agent_id=agent_id,
-                display_name=previous_display_name,
+                name=name,
+                base_suffix=base_suffix,
             )
+            previous_display_name = current.get("display_name")
+            if previous_display_name and previous_display_name != allocated_display_name:
+                await self._profile_repo.release_display_name(
+                    session_id=session_id,
+                    agent_id=agent_id,
+                    display_name=previous_display_name,
+                )
+            next_name = name
+            next_display_name = allocated_display_name
+
+        if profile is not None:
+            next_profile = profile
 
         updated_profile_payload = {
-            "name": name,
-            "display_name": display_name,
-            "profile": current.get("profile"),
+            "name": next_name,
+            "display_name": next_display_name,
+            "profile": next_profile,
         }
         updated_profile_json = json.dumps(updated_profile_payload, ensure_ascii=False, separators=(",", ":"))
         await self._profile_repo.save(
@@ -85,9 +101,9 @@ class PatchAgentUseCase:
             session_id=session_id,
             agent_id=agent_id,
             active=is_active,
-            name=name,
-            display_name=display_name,
-            profile=current.get("profile"),
+            name=next_name,
+            display_name=next_display_name,
+            profile=next_profile,
         )
 
     async def _allocate_unique_display_name(

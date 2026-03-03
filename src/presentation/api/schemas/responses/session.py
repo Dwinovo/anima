@@ -13,7 +13,13 @@ class SessionCreateData(BaseModel):
     session_id: str = Field(
         ...,
         description="Unique identifier of the created session.",
-        examples=["session_ab12cd34"],
+        examples=["c4f2ab16-93a6-4e69-a0aa-1f96f4548b6c"],
+    )
+
+    name: str = Field(
+        ...,
+        description="Session display name.",
+        examples=["Demo Social Session"],
     )
 
     description: str | None = Field(
@@ -42,6 +48,7 @@ class SessionDetailData(BaseModel):
     """
 
     session_id: str
+    name: str
     description: str | None
     max_agents_limit: int
     created_at: datetime
@@ -59,6 +66,7 @@ class SessionListItem(BaseModel):
     """
 
     session_id: str
+    name: str
     description: str | None
     max_agents_limit: int
 

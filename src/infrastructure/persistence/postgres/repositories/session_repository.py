@@ -21,6 +21,7 @@ class PostgresSessionRepository(SessionRepository):
         """执行 `_to_domain` 相关逻辑。"""
         return Session(
             session_id=model.session_id,
+            name=model.name,
             description=model.description,
             max_agents_limit=model.max_agents_limit,
             created_at=model.created_at,
@@ -45,12 +46,14 @@ class PostgresSessionRepository(SessionRepository):
         self,
         *,
         session_id: str,
+        name: str,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
         payload: dict[str, object] = {
             "session_id": session_id,
+            "name": name,
             "max_agents_limit": max_agents_limit,
             "description": description,
         }
@@ -78,6 +81,7 @@ class PostgresSessionRepository(SessionRepository):
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> Session | None:
@@ -87,6 +91,8 @@ class PostgresSessionRepository(SessionRepository):
         if model is None:
             return None
 
+        if name is not None:
+            model.name = name
         if description is not None:
             model.description = description
         if max_agents_limit is not None:

@@ -52,13 +52,18 @@ uv run alembic revision --autogenerate -m "your message"
 uv run alembic revision -m "your message"
 ```
 
-## 4. 首个迁移
+## 4. 当前迁移链
 
-项目已包含首个迁移：
+当前版本迁移链如下：
 
-- `20260302_0001_create_sessions_table`
+1. `20260302_0001_create_sessions_table`
+2. `20260303_0002_align_sessions_control_plane_schema`
+3. `20260304_0003_add_name_to_sessions`（当前 `head`）
 
-该迁移会创建 `sessions` 表（用于 Session 控制面配置）。
+说明：
+
+- 当前 `sessions` 控制面字段以 `head` 为准（包含 `name`）。
+- 部署前建议执行 `uv run alembic current` 校验版本，确保处于最新 `head`。
 
 ## 5. 团队规范
 

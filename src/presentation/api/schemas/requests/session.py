@@ -11,12 +11,12 @@ class SessionCreateRequest(BaseModel):
     It must not be imported into Domain layer.
     """
 
-    session_id: str = Field(
+    name: str = Field(
         ...,
         min_length=1,
-        max_length=64,
-        description="Session 唯一标识，由管理面板传入。",
-        examples=["session_demo_001"],
+        max_length=128,
+        description="Session 展示名，由管理面板传入。",
+        examples=["Demo Social Session"],
     )
 
     description: str | None = Field(
@@ -44,6 +44,12 @@ class SessionCreateRequest(BaseModel):
 class SessionPatchRequest(BaseModel):
     """Session PATCH 请求体。"""
 
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="Session 展示名。",
+    )
     description: str | None = Field(
         default=None,
         max_length=1024,

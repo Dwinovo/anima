@@ -7,6 +7,7 @@ class Session:
     """Session 领域实体。"""
 
     session_id: str
+    name: str
     description: str | None
     max_agents_limit: int
     created_at: datetime

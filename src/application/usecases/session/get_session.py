@@ -13,6 +13,7 @@ class SessionDetailInfo:
     """Session 详情返回 DTO。"""
 
     session_id: str
+    name: str
     description: str | None
     max_agents_limit: int
     created_at: datetime
@@ -38,6 +39,7 @@ class GetSessionUseCase:
         """将 Session 实体映射为详情 DTO。"""
         return SessionDetailInfo(
             session_id=session.session_id,
+            name=session.name,
             description=session.description,
             max_agents_limit=session.max_agents_limit,
             created_at=session.created_at,

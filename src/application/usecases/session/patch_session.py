@@ -16,6 +16,7 @@ class PatchSessionUseCase:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         description: str | None = None,
         max_agents_limit: int | None = None,
     ) -> SessionDetailInfo:
@@ -24,11 +25,13 @@ class PatchSessionUseCase:
         if session is None:
             raise SessionNotFoundException(session_id)
 
+        merged_name = session.name if name is None else name
         merged_description = session.description if description is None else description
         merged_max_agents_limit = session.max_agents_limit if max_agents_limit is None else max_agents_limit
 
         updated_session = await self._session_repo.update(
             session_id=session_id,
+            name=merged_name,
             description=merged_description,
             max_agents_limit=merged_max_agents_limit,
         )
@@ -37,6 +40,7 @@ class PatchSessionUseCase:
 
         return SessionDetailInfo(
             session_id=updated_session.session_id,
+            name=updated_session.name,
             description=updated_session.description,
             max_agents_limit=updated_session.max_agents_limit,
             created_at=updated_session.created_at,

@@ -29,6 +29,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -36,6 +37,7 @@ class InMemorySessionRepository:
         now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
+            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
             created_at=now,

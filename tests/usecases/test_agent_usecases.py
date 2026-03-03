@@ -31,6 +31,7 @@ class InMemorySessionRepository:
         self,
         *,
         session_id: str,
+        name: str | None = None,
         max_agents_limit: int,
         description: str | None = None,
     ) -> Session:
@@ -38,6 +39,7 @@ class InMemorySessionRepository:
         now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
+            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
             created_at=now,
@@ -414,11 +416,50 @@ async def test_patch_agent_usecase_updates_name_and_display_name() -> None:
         session_id="session_demo",
         agent_id=registered.agent_id,
         name="AliceNew",
+        profile=None,
     )
 
     assert result.name == "AliceNew"
+    assert result.profile == "hello"
     assert result.display_name is not None
     assert result.display_name.startswith("AliceNew#")
+
+
+@pytest.mark.asyncio
+async def test_patch_agent_usecase_updates_profile_without_changing_display_name() -> None:
+    """验证仅修改 profile 时保留原 display_name。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_agents_limit=2,
+    )
+    presence_repo = InMemoryPresenceRepository()
+    profile_repo = InMemoryProfileRepository()
+    register_usecase = RegisterAgentUseCase(
+        session_repo,
+        presence_repo,
+        profile_repo,
+        InMemoryAuthStateRepository(),
+        FakeAgentTokenService(),
+    )
+    registered = await register_usecase.execute(
+        session_id="session_demo",
+        name="Alice",
+        profile="old_profile",
+    )
+
+    usecase = PatchAgentUseCase(session_repo, presence_repo, profile_repo)
+    result = await usecase.execute(
+        session_id="session_demo",
+        agent_id=registered.agent_id,
+        name=None,
+        profile="new_profile",
+    )
+
+    assert result.name == "Alice"
+    assert result.profile == "new_profile"
+    assert result.display_name == registered.display_name
 
 
 @pytest.mark.asyncio
