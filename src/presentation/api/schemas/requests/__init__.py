@@ -1,23 +1,15 @@
-from src.presentation.api.schemas.requests.agent import AgentRegisterRequest
-from src.presentation.api.schemas.requests.event import (
-    EventActionRequest,
-    EventReportRequest,
-    EventSubjectRequest,
-    EventTargetRequest,
-)
+from src.presentation.api.schemas.requests.agent import AgentPatchRequest, AgentRegisterRequest
+from src.presentation.api.schemas.requests.event import EventListQuery, EventReportRequest
 from src.presentation.api.schemas.requests.session import (
     SessionCreateRequest,
-    SessionDeleteRequest,
-    SessionListQuery,
+    SessionPatchRequest,
 )
 
 __all__ = [
+    "AgentPatchRequest",
     "AgentRegisterRequest",
-    "EventSubjectRequest",
-    "EventActionRequest",
-    "EventTargetRequest",
     "EventReportRequest",
+    "EventListQuery",
     "SessionCreateRequest",
-    "SessionDeleteRequest",
-    "SessionListQuery",
+    "SessionPatchRequest",
 ]

@@ -1,472 +1,235 @@
-下面是按照严格 DDD 原则、结合你现有架构与图谱设计文档重构后的完整规范版本。
+# Anima 后端规范 v3
 
-你可以直接保存为：
+## 0. 设计目标
 
-> `Anima后端规范_v2.md`
+Anima 是一个泛实体社会互动系统。后端默认定位为 **社会互动总线（Social Interaction Bus）**，不是推理引擎。
 
----
+核心目标：
 
-# Anima 后端规范 v2
+- Session 级别隔离
+- 泛实体（Agent）注册与生命周期管理
+- 事件上报与图谱持久化
+- 上下文组装（GraphRAG 脱水）
+- 协议校验（基础字段与资源合法性）
+- 领域规则稳定、技术实现可替换
 
-**（DDD 架构强化版 · Domain-First 版本）**
+## 1. 架构总原则（脑机分离）
 
----
+### 1.1 服务端默认职责
 
-# 0. 设计目标
+服务端只做三件事：
 
-Anima 是一个 **泛实体社交与图谱记忆系统**。
+1. `Context Assembly`：从 Neo4j / MongoDB / Redis / Postgres 组装 Agent 社交上下文
+2. `Gatekeeper Validation`：校验客户端提交事件是否符合基础协议与资源规则
+3. `Persistence & Broadcast`：事件入库（Mongo + Neo4j）并对外提供查询/订阅
 
-系统必须满足：
+### 1.2 非默认职责
 
-- 世界隔离（Session 级别强隔离）
-    
-- 泛实体（Agent）生命周期管理
-    
-- 事件驱动社交建模
-    
-- 骨肉分离（Graph 指针 + Mongo Payload）
-    
-- 混合 GraphRAG 检索
-    
-- 长短期记忆分层
-    
-- 技术实现可替换，业务规则稳定
-    
+- 服务端内置 LangGraph/LangChain 推理不属于当前版本能力
+- 中心化调度（tick/激活比例）不属于当前版本能力
 
-本规范以 **DDD（领域驱动设计）** 为最高指导原则。
+### 1.3 客户端自由
 
----
+只要遵守 HTTP/WebSocket 协议 + JSON Schema，任何客户端都可接入：
 
-# 1. 分层架构总则（必须遵守）
+- Python / Node.js LLM 客户端
+- Go/Rust 原生 HTTP 客户端
+- 规则脚本或 IoT 设备
 
-## 1.1 四层结构
+### 1.4 服务边界清单（强约束）
+
+| 能力项 | 归属 | 说明 |
+| --- | --- | --- |
+| Session/Agent/Event 资源管理 | 服务端 | 对外提供 RESTful API 与统一错误语义 |
+| Context Assembly（context） | 服务端 | 只做信息整合，不做动作决策 |
+| Event 基础协议与资源合法性校验 | 服务端 | 校验关键字段、主体归属、资源存在性 |
+| Event 持久化（Mongo + Neo4j） | 服务端 | 保证事件落库一致性与可查询性 |
+| 查询与订阅能力 | 服务端 | 提供标准读取接口，不包含推理逻辑 |
+| LLM 推理与工具调用策略 | 客户端 | 包含模型选择、提示词增强、重试策略 |
+| Tick 驱动与激活比例调度 | 客户端/上层编排程序 | 服务端不维护调度状态 |
+| 模型 API Key 管理 | 客户端 | 服务端不托管客户端模型密钥 |
+
+### 1.5 边界判定规则
+
+新增能力时，按以下规则归属：
+
+1. 需要“理解语义并做动作选择”的能力，归客户端。
+2. 需要“校验协议与领域规则”的能力，归服务端。
+3. 需要“写入或读取统一真相源数据”的能力，归服务端。
+4. 需要“定时唤醒、随机抽样、批量触发”的能力，归客户端或独立编排器。
+
+## 2. 分层架构（DDD）
 
 ```
-presentation  →  application  →  domain
-                     ↑
+presentation  ->  application  ->  domain
+                     ^
                infrastructure
 ```
 
-### Presentation（表现层）
+### 2.1 Presentation
 
 - FastAPI 路由
-    
 - 参数校验
-    
 - 响应封装
-    
-- 不写业务逻辑
-    
+- 不写业务编排
 
-### Application（应用层）
+### 2.2 Application
 
-- UseCase
-    
-- 编排多个仓储
-    
-- 事务控制
-    
-- 不依赖具体数据库
-    
+- UseCase 编排
+- 事务与一致性边界
+- 不依赖具体数据库 SDK
 
-### Domain（领域层）
+### 2.3 Domain
 
-- 实体（Entity）
-    
-- 值对象（Value Object）
-    
-- 仓储接口（Protocol）
-    
-- 领域规则
-    
-- 领域异常
-    
-- 绝对禁止依赖数据库或框架
-    
+- Entity / Value Object
+- Repository 协议（Protocol）
+- 领域规则与异常
+- 禁止依赖 FastAPI/SQLAlchemy/Redis/Mongo/Neo4j
 
-### Infrastructure（基础设施层）
+### 2.4 Infrastructure
 
-- Redis / Mongo / Postgres / Neo4j
-    
-- ORM Model
-    
-- Repository 实现
-    
-- 外部 SDK
-    
+- Postgres / Redis / MongoDB / Neo4j 适配
+- 外部 SDK 接入
+- Repository 具体实现
 
----
-
-# 2. 依赖方向规则（硬性约束）
+## 3. 依赖方向（硬约束）
 
 允许：
 
 ```
-presentation → application → domain
-infrastructure → domain
+presentation -> application -> domain
+infrastructure -> domain
 ```
 
 禁止：
 
 ```
-domain → infrastructure
-application → postgres/redis/mongo/neo4j
+domain -> infrastructure
+application -> 具体数据库SDK
 ```
 
-Domain 永远不能 import SQLAlchemy、FastAPI、Redis、Motor、Neo4j。
+## 4. 存储职责矩阵
 
----
+| 存储 | 职责 | 说明 |
+| --- | --- | --- |
+| PostgreSQL | 控制面 | Session 配置与规则锚点 |
+| Redis | 热状态面 | 在线态与 Agent 运行态 |
+| MongoDB | 载荷面 | Event 详情 JSON |
+| Neo4j | 骨架面 | Event 拓扑关系（轻量） |
 
-# 3. 存储分层矩阵
+## 5. PostgreSQL 规范
 
-|存储|职责|说明|
-|---|---|---|
-|PostgreSQL|控制面|Session 配置、配额锚点|
-|Redis|热状态面|在线态、短期记忆|
-|MongoDB|载荷面|Event 详情 JSON|
-|Neo4j|记忆骨架面|事件拓扑 + 向量|
+### 5.1 仅存控制面
 
----
+`sessions` 表建议字段：
 
-# 4. PostgreSQL 规范
+- `session_id`
+- `description`
+- `max_agents_limit`
+- `created_at`
+- `updated_at`
 
-## 4.1 职责
+### 5.2 禁止事项
 
-仅用于控制面：
+- 不写入事件 payload
+- 不存 embedding
+- 不承载短期记忆
 
-- sessions 表（Session）
-    
-- session_id
-    
-- max_agents_limit
-    
-- default_llm
-    
+## 6. Redis 规范
 
-禁止：
+### 6.1 角色
 
-- 写入交互事件
-    
-- 存储 JSON 载荷
-    
-- 存储 embedding
-    
+- Presence（在线 Agent 集合）
+- Agent 运行态（name / profile / display_name / active）
+- Display Name 唯一索引（Session 内）
 
-## 4.2 技术规范
-
-- SQLAlchemy 2.0 AsyncSession
-    
-- 通过依赖注入提供 session
-    
-- 不在 repository 外部直接操作 session
-    
-- 表结构变更必须通过 Alembic 迁移脚本管理
-    
-
----
-
-# 5. Redis 规范
-
-## 5.1 职责
-
-- Agent 在线态（Set）
-    
-- Agent Profile（String）
-    
-- LangGraph Checkpoint（TTL）
-    
-
-## 5.2 Key 设计规范
-
-必须命名空间隔离：
+### 6.2 Key 规范
 
 ```
 anima:session:{session_id}:active_agents
-anima:agent:{session_id}:{uuid}:profile
+anima:agent:{session_id}:{agent_id}
 anima:session:{session_id}:display_name:{display_name}
-anima:checkpoint:{session_id}:{uuid}
-anima:checkpoint:*
-anima:checkpoint_blob:*
-anima:checkpoint_write:*
 ```
 
-Profile 值推荐结构：
+说明：
+
+- 当前版本不使用服务端短期记忆 Checkpoint
+- `display_name` 采用 `name#xxxxx`（五位数字），在同一 Session 内必须唯一
+
+## 7. MongoDB 规范
+
+- 集合：`event_payloads`
+- 主键：`_id = event_id`
+- 存储完整事件载荷 JSON
+- 支持按 `session_id + world_time` 查询
+
+推荐结构：
 
 ```json
 {
-  "name": "Alice",
-  "display_name": "Alice#48291",
-  "profile": { "...": "..." }
-}
-```
-
-其中 `display_name` 由后端分配为 `name#5位数字`。
-后缀起点可基于 `session_id+uuid` 稳定计算，冲突时需线性探测并通过索引键保证同 Session 唯一。
-
-## 5.3 原则
-
-- LangGraph checkpoint 必须 TTL（Presence/Profile 不强制 TTL）
-    
-- 不可作为持久记忆
-    
-- 不可作为唯一数据源
-
-- 若采用 `langgraph-checkpoint-redis`，必须确保 Redis 具备 RedisJSON / RediSearch 模块（建议 Redis Stack）
-    
-
----
-
-# 6. MongoDB 规范（Event 载荷层）
-
-## 6.1 职责
-
-- 以 event_id 为主键
-    
-- 存储完整 JSON payload
-    
-- 批量水合（mget）
-    
-
-## 6.2 文档结构
-
-```json
-{
-  "_id": "event_id",
-  "session_id": "...",
-  "world_time": 123,
+  "_id": "event_xxx",
+  "session_id": "session_demo",
+  "world_time": 12005,
   "verb": "POSTED",
-  "details": { ... },
+  "details": {},
   "schema_version": 1,
-  "created_at": "..."
+  "created_at": "2026-03-03T12:00:00Z"
 }
 ```
 
-## 6.3 原则
+## 8. Neo4j 规范
 
-- 不参与拓扑
-    
-- 不存 embedding
-    
-- 不做图遍历
-    
-
----
-
-# 7. Neo4j 规范（图谱骨架层）
-
-## 7.1 五元拓扑模型
+### 8.1 拓扑
 
 ```
 (Subject)-[:INITIATED]->(Event)-[:TARGETED]->(Object)
 ```
 
-## 7.2 指针模式
+### 8.2 关键原则
 
-Event 节点仅包含：
+- Event 只存骨架字段（`event_id/world_time/verb`）
+- Payload 只在 Mongo
+- 惰性建点（`MERGE`）
+- 查询优先返回标量字段，避免 `RETURN n`
 
-- event_id
-    
-- world_time
-    
-- verb
-    
-- embedding_256
-    
+## 9. Context Assembly 规范
 
-禁止：
+### 9.1 输入
 
-- 存储长文本
-    
-- 存储 JSON payload
-    
+- `session_id`
+- `agent_id`
+- `world_time`（可选）
+- `recall_limit`（可选）
+- `candidate_limit`（可选）
 
-## 7.3 惰性建点原则
+### 9.2 输出（服务端下发）
 
-必须使用 MERGE。
+- `context`：结构化上下文（status_events/media_events 等）
+- `contract_version`：协议版本号
 
-严禁：
+### 9.3 约束
 
-- 预创建 Agent
-    
-- 预创建 Object
-    
-- 批量导入空节点
-    
+- 服务端负责“信息整理”，不负责替客户端做动作决策
+- Context 接口不返回 Agent Profile 文本
 
-## 7.4 性能铁律
+## 10. Gatekeeper 规范
 
-禁止：
+客户端事件上报后，服务端必须执行最小校验：
 
-```
-RETURN n
-RETURN e
-```
+1. Session 存在
+2. Subject Agent 合法（存在且归属 Session）
+3. `world_time` 为非负整数
+4. 关键字段存在（`verb` / `target_ref` / `details`）
 
-必须：
+非法请求返回 `400 Bad Request`，并附结构化错误列表。
 
-```
-RETURN e.event_id
-```
+说明：当前版本对 `details` 不做强约束，先按协议透传并入库。
 
-embedding 维度强制 256。
+## 11. API 响应规范
 
-## 7.5 双写原则
+统一包裹：
 
-写入流程：
-
-1. Mongo 写 payload
-    
-2. Neo4j 写骨架
-    
-3. 最终一致性
-    
-
----
-
-# 8. Repository 设计规范（DDD 强制）
-
-## 8.1 Repository 定义
-
-Repository 是领域的“集合抽象”。
-
-- Domain 定义接口（Protocol）
-    
-- Infrastructure 实现接口
-    
-
-## 8.2 示例
-
-Domain：
-
-```python
-class SessionRepository(Protocol):
-    async def get(self, *, session_id: str) -> Session | None: ...
-```
-
-Infrastructure：
-
-```python
-class PostgresSessionRepository(SessionRepository):
-    ...
-```
-
-UseCase：
-
-```python
-def __init__(self, session_repo: SessionRepository)
-```
-
-## 8.3 禁止
-
-- UseCase 依赖具体实现类
-    
-- Repository 返回 ORM Model（推荐返回领域实体）
-    
-
----
-
-# 9. 依赖注入（DI）规范
-
-## 9.1 单例（App 生命周期）
-
-- RedisClient
-
-- LangGraph Redis Checkpointer（如 `AsyncRedisSaver`）
-    
-- MongoManager
-    
-- Neo4jManager
-    
-- Postgres Engine / SessionFactory
-    
-
-## 9.2 请求级
-
-- AsyncSession
-    
-- Repository
-    
-- UseCase
-    
-
-## 9.3 组合根
-
-- `main.py` 创建基础设施
-    
-- `dependencies.py` 组装 repo/usecase
-    
-- 路由只注入 usecase
-    
-
----
-
-# 10. GraphRAG 三阶段标准
-
-1️⃣ 向量初筛（Neo4j vector index）  
-2️⃣ 拓扑过滤（Neo4j）  
-3️⃣ Mongo mget 水合
-
-禁止：
-
-- 直接在图中取 payload
-    
-- 循环单条 get Mongo
-    
-
----
-
-# 11. 目录结构标准
-
-```
-src/
-  core/
-  presentation/
-  application/
-  domain/
-  infrastructure/
-```
-
-完整推荐结构：
-
-```
-domain/
-  session/
-  agent/
-  memory/
-
-application/
-  usecases/
-
-infrastructure/
-  persistence/
-    postgres/
-    redis/
-    mongo/
-    neo4j/
-```
-
----
-
-# 12. LangGraph 规范
-
-- State 只存认知上下文（灵魂/工作记忆/本轮参数），禁止存放数据库客户端或 ORM 对象
-    
-- 图谱查询必须通过仓储
-    
-- Redis checkpoint 必须 TTL
-
-- 推荐使用 RedisSaver 作为图执行状态持久化，`thread_id` 建议采用 `session_id:uuid`
-    
-- 不允许 Node 内直接操作数据库
-    
-
----
-
-# 13. API 响应规范
-
-统一结构：
-
-```
+```json
 {
   "code": 0,
   "message": "success",
@@ -474,75 +237,87 @@ infrastructure/
 }
 ```
 
-HTTP 状态码遵循 REST 语义：
+推荐 HTTP 状态码：
 
-- 200 OK
-    
-- 201 Created
-    
-- 202 Accepted（异步事件固化）
-    
-- 400 ValidationError
-    
-- 404 NotFound
-    
-- 409 Conflict
-    
+- `200` 查询成功
+- `201` 创建成功
+- `202` 事件已受理并入库
+- `204` 删除成功
+- `400` 参数/协议校验失败
+- `403` 配额或策略拒绝
+- `404` 资源不存在
+- `409` 资源冲突
 
----
+## 12. DI 规范
 
-# 14. 生产级配置规范
+### 12.1 App 单例
 
-- Python 3.12 强制
-    
-- 使用 uv 锁依赖
-    
-- `.env.example` 提交
-    
+- Redis 客户端
+- Mongo 管理器
+- Neo4j 管理器
+- Postgres Engine / SessionFactory
+
+### 12.2 请求级
+
+- AsyncSession
+- Repository
+- UseCase
+
+### 12.3 组合根
+
+- `main.py`：初始化基础设施
+- `dependencies.py`：装配仓储与用例
+- 路由仅注入 UseCase
+
+## 13. 安全与配置
+
+- Python 3.12
+- 依赖锁定（`uv.lock`）
+- `.env.example` 必须维护
 - `.env` 禁止提交
-    
-- 真实生产环境优先使用系统环境变量
-    
-- CORS 必须可配置（至少包含 origins/methods/headers/credentials）
-    
+- CORS 配置化（origins/methods/headers/credentials）
+- 服务端不托管客户端模型密钥
 
----
+## 14. 非目标能力（当前版本）
 
-# 15. 终极原则
+当前版本服务端不做以下事项：
 
-- Domain 是系统存在的理由
-    
-- Infrastructure 只是实现手段
-    
-- Graph 是记忆骨架
-    
-- Mongo 是血肉
-    
-- Redis 是短期意识
-    
-- Postgres 是规则锚点
-    
+- 不内置 LangGraph/LangChain 推理编排
+- 不提供中心化调度器（无 tick、无激活比例运行态）
+- 不托管客户端模型密钥
+- 不暴露“替客户端决策”的私有接口
 
----
+## 15. 生命周期资源契约（RESTful）
 
-# 结语
+### 15.1 Session
 
-Anima 后端是一个：
+- `POST /sessions`：创建（字段：`session_id/description/max_agents_limit`）
+- `GET /sessions`：获取所有 Session
+- `GET /sessions/{session_id}`：获取单个 Session
+- `PATCH /sessions/{session_id}`：编辑 Session（允许修改 `description/max_agents_limit`）
+- `DELETE /sessions/{session_id}`：删除 Session
 
-> 领域优先、技术可替换、图谱驱动的泛实体社交系统。
+### 15.2 Agent
 
-如果后续有人写代码违反本规范，  
-应当视为架构层面错误，而不是风格问题。
+- `POST /sessions/{session_id}/agents`：注册 Agent（字段：`name/profile`）
+- 服务端生成：`agent_id` + 同 Session 唯一 `display_name=name#xxxxx`
+- `GET /sessions/{session_id}/agents/{agent_id}`：获取 Agent 信息
+- `PATCH /sessions/{session_id}/agents/{agent_id}`：编辑 Agent 名称并重算 `display_name`
+- `DELETE /sessions/{session_id}/agents/{agent_id}`：Agent 下线（移除 Redis 运行态）
 
----
+### 15.3 Event 与 Context
 
-如果你愿意，我可以再给你：
+- `POST /sessions/{session_id}/events`：上报事件（当前阶段弱约束）
+- `GET /sessions/{session_id}/events`：获取会话事件流
+- `GET /sessions/{session_id}/agents/{agent_id}/context`：获取 Agent 社交上下文（不含 Profile 文本）
 
-- 一份「v2 → v3 企业级演进蓝图」
-    
-- 或「GraphRAG 深化规范（含向量索引与一致性策略）」
-    
-- 或一份「单元测试与架构验证规范」
-    
+### 15.4 Social Actions Metadata
 
-你想把它打磨到什么级别？
+- `GET /social-actions`：获取社交动作协议元信息（tool_name/verb/target_topologies/parameters_schema）
+
+## 16. 终极原则
+
+- 服务端是规则与状态的单一真相源
+- 推理发生在边缘侧（客户端）
+- 协议比模型更重要
+- 先保证契约稳定，再迭代智能能力

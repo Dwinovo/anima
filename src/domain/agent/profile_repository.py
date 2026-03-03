@@ -9,18 +9,18 @@ class AgentProfileRepository(Protocol):
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         profile_json: str,
         ttl_seconds: int | None = None,
     ) -> None:
         """保存指定实体的画像数据。"""
         ...
 
-    async def get(self, *, session_id: str, uuid: str) -> str | None:
+    async def get(self, *, session_id: str, agent_id: str) -> str | None:
         """读取指定实体的画像数据。"""
         ...
 
-    async def delete(self, *, session_id: str, uuid: str) -> None:
+    async def delete(self, *, session_id: str, agent_id: str) -> None:
         """删除指定实体的画像数据。"""
         ...
 
@@ -28,7 +28,7 @@ class AgentProfileRepository(Protocol):
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> bool:
         """尝试占用展示名，成功返回 ``True``。"""
@@ -38,7 +38,7 @@ class AgentProfileRepository(Protocol):
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> None:
         """释放指定实体占用的展示名。"""

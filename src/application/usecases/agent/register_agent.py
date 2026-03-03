@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from hashlib import sha1
-from typing import Any
+from uuid import uuid4
 
 from src.application.dto.agent import AgentLifecycleResult
 from src.core.exceptions import (
@@ -32,9 +32,9 @@ class RegisterAgentUseCase:
         self._profile_repo = profile_repo
 
     @staticmethod
-    def _suffix_seed(*, session_id: str, uuid: str) -> int:
-        """基于 session_id+uuid 生成稳定的数字后缀起点。"""
-        digest = sha1(f"{session_id}:{uuid}".encode("utf-8"), usedforsecurity=False).hexdigest()
+    def _suffix_seed(*, session_id: str, agent_id: str) -> int:
+        """基于 session_id+agent_id 生成稳定的数字后缀起点。"""
+        digest = sha1(f"{session_id}:{agent_id}".encode("utf-8"), usedforsecurity=False).hexdigest()
         return int(digest[:8], 16) % DISPLAY_NAME_SPACE_SIZE
 
     @staticmethod
@@ -46,64 +46,54 @@ class RegisterAgentUseCase:
         self,
         *,
         session_id: str,
-        uuid: str,
         name: str,
-        profile: dict[str, Any],
+        profile: str,
     ) -> AgentLifecycleResult:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
         if session is None:
             raise SessionNotFoundException(session_id)
 
-        already_active = await self._presence_repo.is_active(session_id=session_id, uuid=uuid)
-        if not already_active:
-            active_count = await self._presence_repo.count_active(session_id=session_id)
-            if active_count >= session.max_agents_limit:
-                raise QuotaExceededException(session_id=session_id, limit=session.max_agents_limit)
-            await self._presence_repo.activate(session_id=session_id, uuid=uuid)
+        active_count = await self._presence_repo.count_active(session_id=session_id)
+        if active_count >= session.max_agents_limit:
+            raise QuotaExceededException(session_id=session_id, limit=session.max_agents_limit)
 
-        existing_profile_json = await self._profile_repo.get(session_id=session_id, uuid=uuid)
-        previous_display_name = self._extract_display_name(existing_profile_json)
-
-        base_suffix = self._suffix_seed(session_id=session_id, uuid=uuid)
+        agent_id = str(uuid4())
+        base_suffix = self._suffix_seed(session_id=session_id, agent_id=agent_id)
         display_name = await self._allocate_unique_display_name(
             session_id=session_id,
-            uuid=uuid,
+            agent_id=agent_id,
             name=name,
             base_suffix=base_suffix,
         )
 
-        if previous_display_name is not None and previous_display_name != display_name:
-            await self._profile_repo.release_display_name(
-                session_id=session_id,
-                uuid=uuid,
-                display_name=previous_display_name,
-            )
-
         profile_payload = {
             "name": name,
             "display_name": display_name,
+            "active": True,
             "profile": profile,
         }
         profile_json = json.dumps(profile_payload, ensure_ascii=False, separators=(",", ":"))
         await self._profile_repo.save(
             session_id=session_id,
-            uuid=uuid,
+            agent_id=agent_id,
             profile_json=profile_json,
         )
+        await self._presence_repo.activate(session_id=session_id, agent_id=agent_id)
         return AgentLifecycleResult(
             session_id=session_id,
-            uuid=uuid,
+            agent_id=agent_id,
             active=True,
             name=name,
             display_name=display_name,
+            profile=profile,
         )
 
     async def _allocate_unique_display_name(
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         name: str,
         base_suffix: int,
     ) -> str:
@@ -113,25 +103,9 @@ class RegisterAgentUseCase:
             candidate = self._build_display_name(name=name, suffix_number=suffix)
             claimed = await self._profile_repo.claim_display_name(
                 session_id=session_id,
-                uuid=uuid,
+                agent_id=agent_id,
                 display_name=candidate,
             )
             if claimed:
                 return candidate
         raise DisplayNameAllocationException(session_id=session_id, name=name)
-
-    @staticmethod
-    def _extract_display_name(profile_json: str | None) -> str | None:
-        """从既有 profile 缓存中提取 display_name。"""
-        if profile_json is None:
-            return None
-        try:
-            payload = json.loads(profile_json)
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(payload, dict):
-            return None
-        display_name = payload.get("display_name")
-        if isinstance(display_name, str) and display_name:
-            return display_name
-        return None

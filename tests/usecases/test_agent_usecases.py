@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import pytest
 
 from src.application.dto.agent import AgentLifecycleResult
+from src.application.usecases.agent.get_agent import GetAgentUseCase
+from src.application.usecases.agent.patch_agent import PatchAgentUseCase
 from src.application.usecases.agent.register_agent import RegisterAgentUseCase
 from src.application.usecases.agent.unregister_agent import UnregisterAgentUseCase
 from src.core.exceptions import (
@@ -30,19 +32,16 @@ class InMemorySessionRepository:
         *,
         session_id: str,
         max_agents_limit: int,
-        default_llm: str | None = None,
-        name: str | None = None,
         description: str | None = None,
     ) -> Session:
         """创建并返回 Session。"""
+        now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
-            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
-            default_llm=default_llm,
-            created_at=datetime.now(timezone.utc),
-            updated_at=None,
+            created_at=now,
+            updated_at=now,
         )
         self._sessions[session_id] = created
         return created
@@ -64,9 +63,9 @@ class InMemoryPresenceRepository:
         """初始化对象并注入所需依赖。"""
         self._active: dict[str, set[str]] = {}
 
-    async def is_active(self, *, session_id: str, uuid: str) -> bool:
+    async def is_active(self, *, session_id: str, agent_id: str) -> bool:
         """判断实体是否在线。"""
-        return uuid in self._active.get(session_id, set())
+        return agent_id in self._active.get(session_id, set())
 
     async def count_active(self, *, session_id: str) -> int:
         """统计在线实体数量。"""
@@ -76,15 +75,16 @@ class InMemoryPresenceRepository:
         """列出在线实体。"""
         return sorted(self._active.get(session_id, set()))
 
-    async def activate(self, *, session_id: str, uuid: str) -> None:
+    async def activate(self, *, session_id: str, agent_id: str) -> None:
         """激活实体在线状态。"""
         active = self._active.setdefault(session_id, set())
-        active.add(uuid)
+        active.add(agent_id)
 
-    async def deactivate(self, *, session_id: str, uuid: str) -> None:
+    async def deactivate(self, *, session_id: str, agent_id: str) -> None:
         """取消实体在线状态。"""
         active = self._active.setdefault(session_id, set())
-        active.discard(uuid)
+        active.discard(agent_id)
+
 
 class InMemoryProfileRepository:
     def __init__(self) -> None:
@@ -96,58 +96,49 @@ class InMemoryProfileRepository:
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         profile_json: str,
         ttl_seconds: int | None = None,
     ) -> None:
         """保存实体画像。"""
-        self._profiles[(session_id, uuid)] = profile_json
+        _ = ttl_seconds
+        self._profiles[(session_id, agent_id)] = profile_json
 
-    async def get(self, *, session_id: str, uuid: str) -> str | None:
+    async def get(self, *, session_id: str, agent_id: str) -> str | None:
         """读取实体画像。"""
-        return self._profiles.get((session_id, uuid))
+        return self._profiles.get((session_id, agent_id))
 
-    async def delete(self, *, session_id: str, uuid: str) -> None:
+    async def delete(self, *, session_id: str, agent_id: str) -> None:
         """删除实体画像。"""
-        self._profiles.pop((session_id, uuid), None)
+        self._profiles.pop((session_id, agent_id), None)
 
     async def claim_display_name(
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> bool:
         """尝试占用展示名。"""
         key = (session_id, display_name)
         current = self._display_name_index.get(key)
         if current is None:
-            self._display_name_index[key] = uuid
+            self._display_name_index[key] = agent_id
             return True
-        return current == uuid
+        return current == agent_id
 
     async def release_display_name(
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> None:
         """释放展示名占用。"""
         key = (session_id, display_name)
-        if self._display_name_index.get(key) != uuid:
+        if self._display_name_index.get(key) != agent_id:
             return
         self._display_name_index.pop(key, None)
-
-
-class InMemoryCheckpointRepository:
-    def __init__(self) -> None:
-        """初始化 Checkpoint 仓储测试替身。"""
-        self._cleared: list[tuple[str, str]] = []
-
-    async def clear(self, *, session_id: str, uuid: str) -> None:
-        """记录清理动作。"""
-        self._cleared.append((session_id, uuid))
 
 
 @pytest.mark.asyncio
@@ -156,40 +147,37 @@ async def test_register_agent_usecase_registers_presence_and_profile() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
-        name="Demo",
         description=None,
         max_agents_limit=2,
-        default_llm="gpt-4o",
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
     usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
 
-    profile = {"persona": "router", "goal": "observe traffic"}
     result = await usecase.execute(
         session_id="session_demo",
-        uuid="agent_a",
         name="Alice",
-        profile=profile,
+        profile="我是一个观察者",
     )
 
     assert isinstance(result, AgentLifecycleResult)
     assert result.session_id == "session_demo"
-    assert result.uuid == "agent_a"
+    assert result.agent_id
     assert result.name == "Alice"
     assert result.display_name is not None
     assert result.display_name.startswith("Alice#")
     assert len(result.display_name.split("#", maxsplit=1)[1]) == 5
     assert result.display_name.split("#", maxsplit=1)[1].isdigit()
     assert result.active is True
-    stored = await profile_repo.get(session_id="session_demo", uuid="agent_a")
+    stored = await profile_repo.get(session_id="session_demo", agent_id=result.agent_id)
     assert stored is not None
     assert json.loads(stored) == {
         "name": "Alice",
         "display_name": result.display_name,
-        "profile": profile,
+        "active": True,
+        "profile": "我是一个观察者",
     }
-    assert await presence_repo.is_active(session_id="session_demo", uuid="agent_a") is True
+    assert await presence_repo.is_active(session_id="session_demo", agent_id=result.agent_id) is True
 
 
 @pytest.mark.asyncio
@@ -198,22 +186,19 @@ async def test_register_agent_usecase_raises_when_quota_exceeded() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
-        name="Demo",
         description=None,
         max_agents_limit=1,
-        default_llm="gpt-4o",
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    await presence_repo.activate(session_id="session_demo", uuid="existing")
+    await presence_repo.activate(session_id="session_demo", agent_id="existing")
     usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
 
     with pytest.raises(QuotaExceededException):
         await usecase.execute(
             session_id="session_demo",
-            uuid="agent_b",
             name="Bob",
-            profile={"persona": "new"},
+            profile="new",
         )
 
 
@@ -229,45 +214,66 @@ async def test_register_agent_usecase_raises_when_session_missing() -> None:
     with pytest.raises(SessionNotFoundException):
         await usecase.execute(
             session_id="session_missing",
-            uuid="agent_a",
             name="Ghost",
-            profile={"persona": "x"},
+            profile="x",
         )
 
 
 @pytest.mark.asyncio
-async def test_register_agent_usecase_allocates_next_suffix_when_name_collision() -> None:
-    """验证展示名冲突时会探测并分配新的后缀。"""
+async def test_get_agent_usecase_returns_agent_detail() -> None:
+    """验证可读取 Agent 信息。"""
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
-        name="Demo",
         description=None,
-        max_agents_limit=10,
-        default_llm="gpt-4o",
+        max_agents_limit=2,
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
-
-    seed = RegisterAgentUseCase._suffix_seed(session_id="session_demo", uuid="agent_a")
-    occupied_display_name = RegisterAgentUseCase._build_display_name(name="Alice", suffix_number=seed)
-    await profile_repo.claim_display_name(
+    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    registered = await register_usecase.execute(
         session_id="session_demo",
-        uuid="agent_other",
-        display_name=occupied_display_name,
+        name="Alice",
+        profile="hello",
     )
 
+    usecase = GetAgentUseCase(session_repo, presence_repo, profile_repo)
+    result = await usecase.execute(session_id="session_demo", agent_id=registered.agent_id)
+
+    assert result.agent_id == registered.agent_id
+    assert result.name == "Alice"
+    assert result.profile == "hello"
+    assert result.active is True
+
+
+@pytest.mark.asyncio
+async def test_patch_agent_usecase_updates_name_and_display_name() -> None:
+    """验证可更新昵称并重算展示名。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_agents_limit=2,
+    )
+    presence_repo = InMemoryPresenceRepository()
+    profile_repo = InMemoryProfileRepository()
+    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    registered = await register_usecase.execute(
+        session_id="session_demo",
+        name="Alice",
+        profile="hello",
+    )
+
+    usecase = PatchAgentUseCase(session_repo, presence_repo, profile_repo)
     result = await usecase.execute(
         session_id="session_demo",
-        uuid="agent_a",
-        name="Alice",
-        profile={"persona": "router"},
+        agent_id=registered.agent_id,
+        name="AliceNew",
     )
 
+    assert result.name == "AliceNew"
     assert result.display_name is not None
-    assert result.display_name != occupied_display_name
-    assert result.display_name.startswith("Alice#")
+    assert result.display_name.startswith("AliceNew#")
 
 
 @pytest.mark.asyncio
@@ -276,51 +282,27 @@ async def test_unregister_agent_usecase_removes_presence_and_profile() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
-        name="Demo",
         description=None,
         max_agents_limit=2,
-        default_llm="gpt-4o",
     )
     presence_repo = InMemoryPresenceRepository()
     profile_repo = InMemoryProfileRepository()
-    checkpoint_repo = InMemoryCheckpointRepository()
-    await presence_repo.activate(session_id="session_demo", uuid="agent_a")
-    await profile_repo.claim_display_name(
+    register_usecase = RegisterAgentUseCase(session_repo, presence_repo, profile_repo)
+    registered = await register_usecase.execute(
         session_id="session_demo",
-        uuid="agent_a",
-        display_name="Alice#12345",
+        name="Alice",
+        profile="router",
     )
-    await profile_repo.save(
-        session_id="session_demo",
-        uuid="agent_a",
-        profile_json=json.dumps(
-            {
-                "name": "Alice",
-                "display_name": "Alice#12345",
-                "profile": {"persona": "router"},
-            },
-            ensure_ascii=False,
-        ),
-    )
-    usecase = UnregisterAgentUseCase(session_repo, presence_repo, profile_repo, checkpoint_repo)
+    usecase = UnregisterAgentUseCase(session_repo, presence_repo, profile_repo)
 
-    result = await usecase.execute(session_id="session_demo", uuid="agent_a")
+    result = await usecase.execute(session_id="session_demo", agent_id=registered.agent_id)
 
     assert isinstance(result, AgentLifecycleResult)
     assert result.session_id == "session_demo"
-    assert result.uuid == "agent_a"
+    assert result.agent_id == registered.agent_id
     assert result.active is False
-    assert await presence_repo.is_active(session_id="session_demo", uuid="agent_a") is False
-    assert await profile_repo.get(session_id="session_demo", uuid="agent_a") is None
-    assert checkpoint_repo._cleared == [("session_demo", "agent_a")]
-    assert (
-        await profile_repo.claim_display_name(
-            session_id="session_demo",
-            uuid="agent_new",
-            display_name="Alice#12345",
-        )
-        is True
-    )
+    assert await presence_repo.is_active(session_id="session_demo", agent_id=registered.agent_id) is False
+    assert await profile_repo.get(session_id="session_demo", agent_id=registered.agent_id) is None
 
 
 @pytest.mark.asyncio
@@ -329,20 +311,17 @@ async def test_unregister_agent_usecase_raises_when_agent_missing() -> None:
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
-        name="Demo",
         description=None,
         max_agents_limit=2,
-        default_llm="gpt-4o",
     )
     usecase = UnregisterAgentUseCase(
         session_repo,
         InMemoryPresenceRepository(),
         InMemoryProfileRepository(),
-        InMemoryCheckpointRepository(),
     )
 
     with pytest.raises(AgentNotFoundException):
-        await usecase.execute(session_id="session_demo", uuid="agent_missing")
+        await usecase.execute(session_id="session_demo", agent_id="agent_missing")
 
 
 @pytest.mark.asyncio
@@ -352,8 +331,7 @@ async def test_unregister_agent_usecase_raises_when_session_missing() -> None:
         InMemorySessionRepository(),
         InMemoryPresenceRepository(),
         InMemoryProfileRepository(),
-        InMemoryCheckpointRepository(),
     )
 
     with pytest.raises(SessionNotFoundException):
-        await usecase.execute(session_id="session_missing", uuid="agent_a")
+        await usecase.execute(session_id="session_missing", agent_id="agent_a")

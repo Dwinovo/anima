@@ -5,7 +5,7 @@ from typing import Protocol
 
 
 class AgentPresenceRepository(Protocol):
-    async def is_active(self, *, session_id: str, uuid: str) -> bool:
+    async def is_active(self, *, session_id: str, agent_id: str) -> bool:
         """判断指定实体当前是否在线。"""
         ...
 
@@ -17,10 +17,10 @@ class AgentPresenceRepository(Protocol):
         """列出指定会话下所有在线实体 UUID。"""
         ...
 
-    async def activate(self, *, session_id: str, uuid: str) -> None:
+    async def activate(self, *, session_id: str, agent_id: str) -> None:
         """将指定实体标记为在线状态。"""
         ...
 
-    async def deactivate(self, *, session_id: str, uuid: str) -> None:
+    async def deactivate(self, *, session_id: str, agent_id: str) -> None:
         """将指定实体标记为离线状态。"""
         ...

@@ -5,6 +5,7 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from src.domain.agent.social_actions import (
+    SOCIAL_ACTION_TARGET_RULES,
     SocialActionCommand,
     SocialActionVerb,
     build_board_ref,
@@ -126,6 +127,26 @@ def build_social_action_tools() -> list[dict[str, Any]]:
     return tools
 
 
+def list_social_action_specs() -> list[dict[str, Any]]:
+    """返回前端可消费的社交动作元数据。"""
+    items: list[dict[str, Any]] = []
+    for tool_name, args_model in _TOOL_ARGS_MODELS.items():
+        verb = _TOOL_VERB_MAP[tool_name]
+        allowed_topologies = sorted(
+            topology.value for topology in SOCIAL_ACTION_TARGET_RULES[verb]
+        )
+        items.append(
+            {
+                "tool_name": tool_name,
+                "verb": verb.value,
+                "description": _TOOL_DESCRIPTIONS[tool_name],
+                "allowed_target_topologies": allowed_topologies,
+                "parameters_schema": args_model.model_json_schema(),
+            }
+        )
+    return items
+
+
 def parse_social_action_tool_call(
     *,
     session_id: str,
@@ -222,5 +243,6 @@ def _require_payload_type(payload: _BaseToolArgs, expected_type: type[_BaseToolA
 __all__ = [
     "InvalidSocialActionToolCallError",
     "build_social_action_tools",
+    "list_social_action_specs",
     "parse_social_action_tool_call",
 ]

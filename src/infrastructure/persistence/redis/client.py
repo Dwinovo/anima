@@ -80,3 +80,26 @@ class RedisClient:
         members = await self._redis.smembers(key)
         normalized = [member.decode("utf-8") if isinstance(member, bytes) else str(member) for member in members]
         return sorted(normalized)
+
+    async def incr_value(self, key: str) -> int:
+        """将字符串计数器自增并返回最新值。"""
+        return int(await self._redis.incr(key))
+
+    async def get_hash_fields(self, key: str, fields: list[str]) -> dict[str, str]:
+        """批量读取 Hash 字段并返回存在值的映射。"""
+        if not fields:
+            return {}
+        values = await self._redis.hmget(key, fields)
+        result: dict[str, str] = {}
+        for field, value in zip(fields, values, strict=True):
+            if value is None:
+                continue
+            if isinstance(value, bytes):
+                result[field] = value.decode("utf-8")
+            else:
+                result[field] = str(value)
+        return result
+
+    async def set_hash_field(self, key: str, field: str, value: str) -> None:
+        """写入 Hash 单字段值。"""
+        await self._redis.hset(key, field, value)

@@ -12,19 +12,13 @@ def active_agents_key(session_id: str) -> str:
     return f"{ACTIVE_AGENTS_KEY_PREFIX}{session_id}{ACTIVE_AGENTS_KEY_SUFFIX}"
 
 
-def agent_profile_key(session_id: str, uuid: str) -> str:
-    # 单个 Agent 的 Profile（String JSON）
+def agent_profile_key(session_id: str, agent_id: str) -> str:
+    # 单个 Agent 运行态（String JSON）
     """执行 `agent_profile_key` 相关逻辑。"""
-    return f"anima:agent:{session_id}:{uuid}:profile"
+    return f"anima:agent:{session_id}:{agent_id}"
 
 
 def display_name_key(session_id: str, display_name: str) -> str:
-    # 展示名唯一索引（String -> uuid）
+    # 展示名唯一索引（String -> agent_id）
     """执行 `display_name_key` 相关逻辑。"""
     return f"{SESSION_KEY_PREFIX}{session_id}{DISPLAY_NAME_KEY_SUFFIX}{display_name}"
-
-
-def checkpoint_key(session_id: str, uuid: str) -> str:
-    # LangGraph checkpoint（String JSON + TTL）
-    """执行 `checkpoint_key` 相关逻辑。"""
-    return f"anima:checkpoint:{session_id}:{uuid}"

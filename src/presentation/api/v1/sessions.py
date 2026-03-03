@@ -5,9 +5,11 @@ from fastapi.responses import Response
 
 from src.application.usecases.session.create_session import CreateSessionUseCase
 from src.application.usecases.session.delete_session import DeleteSessionUseCase
+from src.application.usecases.session.get_session import GetSessionUseCase
 from src.application.usecases.session.list_sessions import (
     ListSessionsUseCase,
 )
+from src.application.usecases.session.patch_session import PatchSessionUseCase
 from src.presentation.api.constants.http_status import (
     HTTP_200_OK,
     SESSION_CREATED,
@@ -16,12 +18,18 @@ from src.presentation.api.constants.http_status import (
 from src.presentation.api.dependencies import (
     get_create_session_usecase,
     get_delete_session_usecase,
+    get_get_session_usecase,
     get_list_sessions_usecase,
+    get_patch_session_usecase,
 )
-from src.presentation.api.schemas.requests.session import SessionCreateRequest
+from src.presentation.api.schemas.requests.session import (
+    SessionCreateRequest,
+    SessionPatchRequest,
+)
 from src.presentation.api.schemas.responses.envelope import ApiResponse
 from src.presentation.api.schemas.responses.session import (
     SessionCreateData,
+    SessionDetailData,
     SessionListData,
     SessionListItem,
 )
@@ -41,17 +49,16 @@ async def create_session(
 ) -> ApiResponse[SessionCreateData]:
     """创建资源并返回创建结果。"""
     session = await usecase.execute(
-        name=payload.name,
+        session_id=payload.session_id,
         description=payload.description,
         max_agents_limit=payload.max_agents_limit,
-        default_llm=payload.default_llm,
     )
     data = SessionCreateData(
         session_id=session.session_id,
-        name=session.name,
         description=session.description,
         max_agents_limit=session.max_agents_limit,
-        default_llm=session.default_llm,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
     )
 
     return ApiResponse(
@@ -75,7 +82,7 @@ async def list_sessions(
     items = [
         SessionListItem(
             session_id=item.session_id,
-            name=item.name,
+            description=item.description,
             max_agents_limit=item.max_agents_limit,
         )
         for item in sessions
@@ -84,6 +91,61 @@ async def list_sessions(
         code=0,
         message="success",
         data=SessionListData(items=items, total=len(items)),
+    )
+
+
+@router.get(
+    "/{session_id}",
+    status_code=HTTP_200_OK,
+    response_model=ApiResponse[SessionDetailData],
+    summary="Get session",
+)
+async def get_session(
+    session_id: str,
+    usecase: GetSessionUseCase = Depends(get_get_session_usecase),
+) -> ApiResponse[SessionDetailData]:
+    """获取指定 Session 详情。"""
+    session = await usecase.execute(session_id=session_id)
+    return ApiResponse(
+        code=0,
+        message="success",
+        data=SessionDetailData(
+            session_id=session.session_id,
+            description=session.description,
+            max_agents_limit=session.max_agents_limit,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+        ),
+    )
+
+
+@router.patch(
+    "/{session_id}",
+    status_code=HTTP_200_OK,
+    response_model=ApiResponse[SessionDetailData],
+    summary="Patch session",
+)
+async def patch_session(
+    session_id: str,
+    payload: SessionPatchRequest,
+    usecase: PatchSessionUseCase = Depends(get_patch_session_usecase),
+) -> ApiResponse[SessionDetailData]:
+    """增量更新指定 Session。"""
+    session = await usecase.execute(
+        session_id=session_id,
+        description=payload.description,
+        max_agents_limit=payload.max_agents_limit,
+    )
+    return ApiResponse(
+        code=0,
+        message="success",
+        data=SessionDetailData(
+            session_id=session.session_id,
+            description=session.description,
+            max_agents_limit=session.max_agents_limit,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+        ),
     )
 
 

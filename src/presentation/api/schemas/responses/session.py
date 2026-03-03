@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -14,12 +16,6 @@ class SessionCreateData(BaseModel):
         examples=["session_ab12cd34"],
     )
 
-    name: str = Field(
-        ...,
-        description="Session display name.",
-        examples=["Cyber City Alpha"],
-    )
-
     description: str | None = Field(
         default=None,
         description="Optional session description.",
@@ -31,11 +27,8 @@ class SessionCreateData(BaseModel):
         examples=[1000],
     )
 
-    default_llm: str | None = Field(
-        default=None,
-        description="Default LLM model configured for this session.",
-        examples=["gpt-4o"],
-    )
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(
         extra="forbid",
@@ -49,10 +42,10 @@ class SessionDetailData(BaseModel):
     """
 
     session_id: str
-    name: str
     description: str | None
     max_agents_limit: int
-    default_llm: str | None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(
         extra="forbid",
@@ -66,7 +59,7 @@ class SessionListItem(BaseModel):
     """
 
     session_id: str
-    name: str
+    description: str | None
     max_agents_limit: int
 
     model_config = ConfigDict(

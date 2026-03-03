@@ -4,7 +4,8 @@ from typing import Any
 from uuid import uuid4
 
 from src.application.dto.event import EventReportResult
-from src.core.exceptions import SessionNotFoundException
+from src.core.exceptions import AgentNotFoundException, SessionNotFoundException
+from src.domain.agent.profile_repository import AgentProfileRepository
 from src.domain.memory.event_payload_repository import EventPayloadRepository
 from src.domain.memory.graph_event_repository import GraphEventRepository
 from src.domain.session.repository import SessionRepository
@@ -16,11 +17,13 @@ class ReportEventUseCase:
     def __init__(
         self,
         session_repo: SessionRepository,
+        profile_repo: AgentProfileRepository,
         event_payload_repo: EventPayloadRepository,
         graph_event_repo: GraphEventRepository,
     ) -> None:
         """初始化对象并注入所需依赖。"""
         self._session_repo = session_repo
+        self._profile_repo = profile_repo
         self._event_payload_repo = event_payload_repo
         self._graph_event_repo = graph_event_repo
 
@@ -35,12 +38,17 @@ class ReportEventUseCase:
         details: dict[str, Any],
         schema_version: int,
         is_social: bool,
-        embedding_256: list[float] | None,
     ) -> EventReportResult:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
         if session is None:
             raise SessionNotFoundException(session_id)
+        subject_profile = await self._profile_repo.get(
+            session_id=session_id,
+            agent_id=subject_uuid,
+        )
+        if subject_profile is None:
+            raise AgentNotFoundException(session_id=session_id, uuid=subject_uuid)
 
         event_id = f"event_{uuid4().hex}"
         # 先写载荷（Mongo），再写骨架（Neo4j），遵循规范中的双写顺序。
@@ -64,7 +72,6 @@ class ReportEventUseCase:
             verb=verb,
             subject_uuid=subject_uuid,
             target_ref=target_ref,
-            embedding_256=embedding_256,
             is_social=is_social,
         )
         return EventReportResult(

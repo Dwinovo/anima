@@ -21,10 +21,8 @@ class PostgresSessionRepository(SessionRepository):
         """执行 `_to_domain` 相关逻辑。"""
         return Session(
             session_id=model.session_id,
-            name=model.name or model.session_id,
             description=model.description,
             max_agents_limit=model.max_agents_limit,
-            default_llm=model.default_llm,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -48,18 +46,15 @@ class PostgresSessionRepository(SessionRepository):
         *,
         session_id: str,
         max_agents_limit: int,
-        default_llm: str | None = None,
-        name: str | None = None,
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
-        model = SessionModel(
-            session_id=session_id,
-            max_agents_limit=max_agents_limit,
-            default_llm=default_llm,
-            name=name,
-            description=description,
-        )
+        payload: dict[str, object] = {
+            "session_id": session_id,
+            "max_agents_limit": max_agents_limit,
+            "description": description,
+        }
+        model = SessionModel(**payload)
         self._session.add(model)
         await self._session.commit()
         await self._session.refresh(model)
@@ -78,3 +73,24 @@ class PostgresSessionRepository(SessionRepository):
         """删除指定资源。"""
         await self._session.execute(delete(SessionModel).where(SessionModel.session_id == session_id))
         await self._session.commit()
+
+    async def update(
+        self,
+        *,
+        session_id: str,
+        description: str | None = None,
+        max_agents_limit: int | None = None,
+    ) -> Session | None:
+        """更新指定会话并返回最新实体。"""
+        stmt = select(SessionModel).where(SessionModel.session_id == session_id)
+        model = await self._session.scalar(stmt)
+        if model is None:
+            return None
+
+        if description is not None:
+            model.description = description
+        if max_agents_limit is not None:
+            model.max_agents_limit = max_agents_limit
+        await self._session.commit()
+        await self._session.refresh(model)
+        return self._to_domain(model)

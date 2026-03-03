@@ -4,7 +4,6 @@ import json
 
 from src.application.dto.agent import AgentLifecycleResult
 from src.core.exceptions import AgentNotFoundException, SessionNotFoundException
-from src.domain.agent.checkpoint_repository import AgentCheckpointRepository
 from src.domain.agent.presence_repository import AgentPresenceRepository
 from src.domain.agent.profile_repository import AgentProfileRepository
 from src.domain.session.repository import SessionRepository
@@ -18,38 +17,35 @@ class UnregisterAgentUseCase:
         session_repo: SessionRepository,
         presence_repo: AgentPresenceRepository,
         profile_repo: AgentProfileRepository,
-        checkpoint_repo: AgentCheckpointRepository,
     ) -> None:
         """初始化对象并注入所需依赖。"""
         self._session_repo = session_repo
         self._presence_repo = presence_repo
         self._profile_repo = profile_repo
-        self._checkpoint_repo = checkpoint_repo
 
-    async def execute(self, *, session_id: str, uuid: str) -> AgentLifecycleResult:
+    async def execute(self, *, session_id: str, agent_id: str) -> AgentLifecycleResult:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
         if session is None:
             raise SessionNotFoundException(session_id)
 
-        is_active = await self._presence_repo.is_active(session_id=session_id, uuid=uuid)
-        profile = await self._profile_repo.get(session_id=session_id, uuid=uuid)
+        is_active = await self._presence_repo.is_active(session_id=session_id, agent_id=agent_id)
+        profile = await self._profile_repo.get(session_id=session_id, agent_id=agent_id)
         if not is_active and profile is None:
-            raise AgentNotFoundException(session_id=session_id, uuid=uuid)
+            raise AgentNotFoundException(session_id=session_id, uuid=agent_id)
 
         display_name = self._extract_display_name(profile)
         if display_name is not None:
             await self._profile_repo.release_display_name(
                 session_id=session_id,
-                uuid=uuid,
+                agent_id=agent_id,
                 display_name=display_name,
             )
-        await self._presence_repo.deactivate(session_id=session_id, uuid=uuid)
-        await self._profile_repo.delete(session_id=session_id, uuid=uuid)
-        await self._checkpoint_repo.clear(session_id=session_id, uuid=uuid)
+        await self._presence_repo.deactivate(session_id=session_id, agent_id=agent_id)
+        await self._profile_repo.delete(session_id=session_id, agent_id=agent_id)
         return AgentLifecycleResult(
             session_id=session_id,
-            uuid=uuid,
+            agent_id=agent_id,
             active=False,
         )
 

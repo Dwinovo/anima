@@ -16,50 +16,50 @@ class RedisProfileRepository(AgentProfileRepository):
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         profile_json: str,
         ttl_seconds: int | None = None,
     ) -> None:
         """保存目标数据。"""
         await self._client.set_value(
-            agent_profile_key(session_id, uuid),
+            agent_profile_key(session_id, agent_id),
             profile_json,
             ttl_seconds=ttl_seconds,
         )
 
-    async def get(self, *, session_id: str, uuid: str) -> str | None:
+    async def get(self, *, session_id: str, agent_id: str) -> str | None:
         """执行 `get` 相关逻辑。"""
-        return await self._client.get_value(agent_profile_key(session_id, uuid))
+        return await self._client.get_value(agent_profile_key(session_id, agent_id))
 
-    async def delete(self, *, session_id: str, uuid: str) -> None:
+    async def delete(self, *, session_id: str, agent_id: str) -> None:
         """删除指定资源。"""
-        await self._client.delete_key(agent_profile_key(session_id, uuid))
+        await self._client.delete_key(agent_profile_key(session_id, agent_id))
 
     async def claim_display_name(
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> bool:
         """尝试占用展示名，若已被自己占用则视为成功。"""
         key = display_name_key(session_id, display_name)
-        claimed = await self._client.set_value_if_absent(key, uuid)
+        claimed = await self._client.set_value_if_absent(key, agent_id)
         if claimed:
             return True
         existing = await self._client.get_value(key)
-        return existing == uuid
+        return existing == agent_id
 
     async def release_display_name(
         self,
         *,
         session_id: str,
-        uuid: str,
+        agent_id: str,
         display_name: str,
     ) -> None:
         """仅当展示名属于当前实体时释放占用。"""
         key = display_name_key(session_id, display_name)
         existing = await self._client.get_value(key)
-        if existing != uuid:
+        if existing != agent_id:
             return
         await self._client.delete_key(key)

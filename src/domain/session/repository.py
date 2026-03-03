@@ -19,8 +19,6 @@ class SessionRepository(Protocol):
         *,
         session_id: str,
         max_agents_limit: int,
-        default_llm: str | None = None,
-        name: str | None = None,
         description: str | None = None,
     ) -> Session:
         """创建会话配置并返回领域实体。"""
@@ -33,6 +31,16 @@ class SessionRepository(Protocol):
         max_agents_limit: int,
     ) -> None:
         """更新指定会话的配额上限。"""
+        ...
+
+    async def update(
+        self,
+        *,
+        session_id: str,
+        description: str | None = None,
+        max_agents_limit: int | None = None,
+    ) -> Session | None:
+        """更新指定会话配置。"""
         ...
 
     async def delete(self, *, session_id: str) -> None:

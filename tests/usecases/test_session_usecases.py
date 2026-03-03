@@ -6,9 +6,9 @@ import pytest
 
 from src.application.usecases.session.create_session import CreateSessionUseCase
 from src.application.usecases.session.delete_session import DeleteSessionUseCase
-from src.application.usecases.session.list_sessions import (
-    ListSessionsUseCase,
-)
+from src.application.usecases.session.get_session import GetSessionUseCase
+from src.application.usecases.session.list_sessions import ListSessionsUseCase
+from src.application.usecases.session.patch_session import PatchSessionUseCase
 from src.core.exceptions import SessionNotFoundException
 from src.domain.session.entities import Session
 
@@ -31,19 +31,16 @@ class InMemorySessionRepository:
         *,
         session_id: str,
         max_agents_limit: int,
-        default_llm: str | None = None,
-        name: str | None = None,
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
+        now = datetime.now(timezone.utc)
         created = Session(
             session_id=session_id,
-            name=name or session_id,
             description=description,
             max_agents_limit=max_agents_limit,
-            default_llm=default_llm,
-            created_at=datetime.now(timezone.utc),
-            updated_at=None,
+            created_at=now,
+            updated_at=now,
         )
         self._sessions[session_id] = created
         return created
@@ -60,39 +57,40 @@ class InMemorySessionRepository:
         """删除指定资源。"""
         self._sessions.pop(session_id, None)
 
+    async def update(
+        self,
+        *,
+        session_id: str,
+        description: str | None = None,
+        max_agents_limit: int | None = None,
+    ) -> Session | None:
+        """更新指定 Session。"""
+        existing = self._sessions.get(session_id)
+        if existing is None:
+            return None
+        if description is not None:
+            existing.description = description
+        if max_agents_limit is not None:
+            existing.max_agents_limit = max_agents_limit
+        existing.updated_at = datetime.now(timezone.utc)
+        return existing
+
 
 @pytest.mark.asyncio
-async def test_create_session_usecase_generates_session_id_and_uses_default_llm() -> None:
-    """验证该测试场景的预期行为。"""
+async def test_create_session_usecase_keeps_client_session_id() -> None:
+    """验证创建 Session 时使用客户端传入的 session_id。"""
     repo = InMemorySessionRepository()
-    usecase = CreateSessionUseCase(repo, default_llm_model="gpt-4o")
+    usecase = CreateSessionUseCase(repo)
 
     created = await usecase.execute(
-        name="Cyber City Alpha",
+        session_id="session_alpha",
         description="social world",
         max_agents_limit=100,
-        default_llm=None,
     )
 
-    assert created.session_id.startswith("session_")
-    assert created.default_llm == "gpt-4o"
-    assert created.name == "Cyber City Alpha"
-
-
-@pytest.mark.asyncio
-async def test_create_session_usecase_keeps_explicit_default_llm() -> None:
-    """验证该测试场景的预期行为。"""
-    repo = InMemorySessionRepository()
-    usecase = CreateSessionUseCase(repo, default_llm_model="gpt-4o")
-
-    created = await usecase.execute(
-        name="Edge Realm",
-        description=None,
-        max_agents_limit=64,
-        default_llm="gpt-4.1-mini",
-    )
-
-    assert created.default_llm == "gpt-4.1-mini"
+    assert created.session_id == "session_alpha"
+    assert created.description == "social world"
+    assert created.max_agents_limit == 100
 
 
 @pytest.mark.asyncio
@@ -101,10 +99,8 @@ async def test_delete_session_usecase_deletes_existing_session() -> None:
     repo = InMemorySessionRepository()
     created = await repo.create(
         session_id="session_deadbeef",
-        name="To Remove",
         description=None,
         max_agents_limit=10,
-        default_llm="gpt-4o",
     )
     usecase = DeleteSessionUseCase(repo)
 
@@ -129,17 +125,13 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_alpha",
-        name="Alpha",
         description="alpha desc",
         max_agents_limit=100,
-        default_llm="gpt-4o",
     )
     await session_repo.create(
         session_id="session_beta",
-        name="Beta",
         description=None,
         max_agents_limit=50,
-        default_llm="gpt-4.1-mini",
     )
     usecase = ListSessionsUseCase(session_repo)
 
@@ -147,8 +139,62 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
 
     assert len(result) == 2
     assert result[0].session_id == "session_alpha"
-    assert result[0].name == "Alpha"
+    assert result[0].description == "alpha desc"
     assert result[0].max_agents_limit == 100
     assert result[1].session_id == "session_beta"
-    assert result[1].name == "Beta"
+    assert result[1].description is None
     assert result[1].max_agents_limit == 50
+
+
+@pytest.mark.asyncio
+async def test_get_session_usecase_returns_existing_session() -> None:
+    """验证可读取 Session 详情。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_alpha",
+        description=None,
+        max_agents_limit=100,
+    )
+    usecase = GetSessionUseCase(session_repo)
+
+    result = await usecase.execute(session_id="session_alpha")
+
+    assert result.session_id == "session_alpha"
+    assert result.max_agents_limit == 100
+    assert result.created_at is not None
+    assert result.updated_at is not None
+
+
+@pytest.mark.asyncio
+async def test_patch_session_usecase_updates_partial_fields() -> None:
+    """验证可对 Session 执行增量更新。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_alpha",
+        description=None,
+        max_agents_limit=100,
+    )
+    usecase = PatchSessionUseCase(session_repo)
+
+    result = await usecase.execute(
+        session_id="session_alpha",
+        description="new desc",
+        max_agents_limit=120,
+    )
+
+    assert result.session_id == "session_alpha"
+    assert result.description == "new desc"
+    assert result.max_agents_limit == 120
+
+
+@pytest.mark.asyncio
+async def test_patch_session_usecase_raises_for_missing_session() -> None:
+    """验证 Session 不存在时 PATCH 会抛出异常。"""
+    session_repo = InMemorySessionRepository()
+    usecase = PatchSessionUseCase(session_repo)
+
+    with pytest.raises(SessionNotFoundException):
+        await usecase.execute(
+            session_id="session_missing",
+            description="new_desc",
+        )

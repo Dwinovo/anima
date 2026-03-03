@@ -4,10 +4,10 @@ from datetime import datetime
 
 @dataclass(slots=True)
 class Session:
+    """Session 领域实体。"""
+
     session_id: str
-    name: str
     description: str | None
     max_agents_limit: int
-    default_llm: str | None
     created_at: datetime
-    updated_at: datetime | None
+    updated_at: datetime

@@ -20,9 +20,6 @@ from src.infrastructure.persistence.postgres.database import create_engine, crea
 
 # Redis
 from src.infrastructure.persistence.redis.client import RedisClient
-from src.infrastructure.persistence.redis.langgraph_checkpointer import (
-    create_langgraph_checkpointer,
-)
 from src.presentation.api.exception_handlers import (
     anima_exception_handler,
     http_exception_handler,
@@ -33,8 +30,8 @@ from src.presentation.router import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # 1) Redis（单例）
     """管理应用生命周期内的资源初始化与释放。"""
+    # 1) Redis（单例）
     app.state.redis = RedisClient.from_url(settings.redis_url)
 
     # 2) Mongo（单例）
@@ -50,20 +47,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         user=settings.neo4j_user,
         password=settings.neo4j_password,
     )
-
-    async with create_langgraph_checkpointer(
-        redis_url=settings.redis_url,
-        ttl_seconds=settings.langgraph_checkpoint_ttl_seconds,
-    ) as checkpointer:
-        app.state.langgraph_checkpointer = checkpointer
-        try:
-            yield
-        finally:
-            # 关闭顺序：先关请求层依赖外的资源
-            await app.state.redis.close()
-            await app.state.mongo.close()
-            await app.state.pg_engine.dispose()
-            await app.state.neo4j.close()
+    try:
+        yield
+    finally:
+        # 关闭顺序：先关请求层依赖外的资源
+        await app.state.redis.close()
+        await app.state.mongo.close()
+        await app.state.pg_engine.dispose()
+        await app.state.neo4j.close()
 
 
 app = FastAPI(lifespan=lifespan)

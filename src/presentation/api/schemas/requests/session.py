@@ -11,12 +11,12 @@ class SessionCreateRequest(BaseModel):
     It must not be imported into Domain layer.
     """
 
-    name: str = Field(
+    session_id: str = Field(
         ...,
         min_length=1,
-        max_length=128,
-        description="Human-readable name of the session.",
-        examples=["Cyber City Alpha"],
+        max_length=64,
+        description="Session 唯一标识，由管理面板传入。",
+        examples=["session_demo_001"],
     )
 
     description: str | None = Field(
@@ -34,14 +34,6 @@ class SessionCreateRequest(BaseModel):
         examples=[1000],
     )
 
-    default_llm: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=64,
-        description="Optional default LLM model for this session.",
-        examples=["gpt-4o"],
-    )
-
     model_config = ConfigDict(
         extra="forbid",
         str_strip_whitespace=True,
@@ -49,45 +41,27 @@ class SessionCreateRequest(BaseModel):
     )
 
 
-class SessionDeleteRequest(BaseModel):
-    """
-    Optional request body for deleting a session.
+class SessionPatchRequest(BaseModel):
+    """Session PATCH 请求体。"""
 
-    In many REST designs, DELETE uses only path parameter.
-    This schema is provided for future extension (e.g., force delete flag).
-    """
-
-    force: bool = Field(
-        default=False,
-        description="Force deletion including graph and payload cleanup.",
+    description: str | None = Field(
+        default=None,
+        max_length=1024,
+        description="Session 描述。",
     )
-
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-
-
-class SessionListQuery(BaseModel):
-    """
-    Query parameters for listing sessions (future-ready design).
-    """
-
-    offset: int = Field(
-        default=0,
-        ge=0,
-        description="Pagination offset.",
-    )
-
-    limit: int = Field(
-        default=20,
+    max_agents_limit: int | None = Field(
+        default=None,
         ge=1,
-        le=100,
-        description="Maximum number of sessions to return.",
+        le=100_000,
+        description="最大 Agent 上限。",
     )
-
     model_config = ConfigDict(
         extra="forbid",
+        str_strip_whitespace=True,
     )
 
 
-__all__ = ["SessionCreateRequest", "SessionDeleteRequest", "SessionListQuery"]
+__all__ = [
+    "SessionCreateRequest",
+    "SessionPatchRequest",
+]

@@ -28,14 +28,18 @@ class EventSearchItem:
     schema_version: int
     is_social: bool
 
-
 @dataclass(slots=True)
-class EventSearchResult:
-    """事件检索结果 DTO。"""
+class EventListResult:
+    """会话事件列表结果 DTO。"""
 
     session_id: str
     items: list[EventSearchItem]
-    total: int
+    next_cursor: str | None
+    has_more: bool
 
 
-__all__ = ["EventReportResult", "EventSearchItem", "EventSearchResult"]
+__all__ = [
+    "EventReportResult",
+    "EventSearchItem",
+    "EventListResult",
+]
