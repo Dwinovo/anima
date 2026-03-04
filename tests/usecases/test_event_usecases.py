@@ -145,7 +145,6 @@ class InMemoryGraphEventRepository:
         verb: str,
         subject_uuid: str,
         target_ref: str,
-        is_social: bool,
     ) -> None:
         """写入或更新 Event 骨架。"""
         self._calls.append("neo4j.upsert")
@@ -155,7 +154,6 @@ class InMemoryGraphEventRepository:
             "verb": verb,
             "subject_uuid": subject_uuid,
             "target_ref": target_ref,
-            "is_social": is_social,
         }
 
     async def list_recent_event_ids(
@@ -196,10 +194,9 @@ class InMemoryGraphSearchRepository:
         verb: str,
         subject_uuid: str,
         target_ref: str,
-        is_social: bool,
     ) -> None:
         """占位实现：列表查询测试不会用到此方法。"""
-        _ = (session_id, event_id, world_time, verb, subject_uuid, target_ref, is_social)
+        _ = (session_id, event_id, world_time, verb, subject_uuid, target_ref)
 
     async def list_recent_event_ids(
         self,
@@ -247,7 +244,6 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
         verb="POSTED",
         details={"content": "hello"},
         schema_version=1,
-        is_social=True,
     )
 
     assert isinstance(result, EventReportResult)
@@ -266,7 +262,6 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
     assert payload_doc["target_ref"] == "agent_b"
     assert payload_doc["details"] == {"content": "hello"}
     assert payload_doc["schema_version"] == 1
-    assert payload_doc["is_social"] is True
     assert graph_repo._events[result.event_id]["verb"] == "POSTED"
 
 
@@ -287,7 +282,6 @@ async def test_report_event_usecase_raises_when_session_missing() -> None:
             verb="POSTED",
             details={},
             schema_version=1,
-            is_social=True,
         )
 
 
@@ -314,7 +308,6 @@ async def test_report_event_usecase_raises_when_subject_agent_missing() -> None:
             verb="POSTED",
             details={},
             schema_version=1,
-            is_social=True,
         )
 
 
@@ -338,7 +331,6 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "target_ref": "board:session_demo",
             "details": {"content": "third"},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     await payload_repo.put(
@@ -351,7 +343,6 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "target_ref": "event_003",
             "details": {"content": "second"},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     await payload_repo.put(
@@ -364,7 +355,6 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "target_ref": "event_003",
             "details": {},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     graph_repo = InMemoryGraphSearchRepository(
@@ -406,7 +396,6 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "target_ref": "board:session_demo",
             "details": {"content": "third"},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     await payload_repo.put(
@@ -419,7 +408,6 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "target_ref": "event_003",
             "details": {"content": "second"},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     await payload_repo.put(
@@ -432,7 +420,6 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "target_ref": "event_003",
             "details": {},
             "schema_version": 1,
-            "is_social": True,
         },
     )
     graph_repo = InMemoryGraphSearchRepository(

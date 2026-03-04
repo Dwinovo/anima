@@ -15,7 +15,6 @@ class GraphEventRepository(Protocol):
         verb: str,
         subject_uuid: str,
         target_ref: str,
-        is_social: bool,
     ) -> None:
         """写入事件骨架（惰性建点 + 关系建立）"""
 

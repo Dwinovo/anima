@@ -85,7 +85,6 @@ class ListSessionEventsUseCase:
         target_ref = payload.get("target_ref")
         details = payload.get("details")
         schema_version = payload.get("schema_version")
-        is_social = payload.get("is_social")
         return EventSearchItem(
             event_id=event_id,
             world_time=world_time if isinstance(world_time, int) else 0,
@@ -94,5 +93,4 @@ class ListSessionEventsUseCase:
             target_ref=target_ref if isinstance(target_ref, str) else "",
             details=details if isinstance(details, dict) else {},
             schema_version=schema_version if isinstance(schema_version, int) else 1,
-            is_social=is_social if isinstance(is_social, bool) else False,
         )

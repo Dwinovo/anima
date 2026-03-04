@@ -185,7 +185,6 @@ def parse_social_action_tool_call(
         target_ref=target_ref,
         details=details,
         inner_thought_brief=payload.inner_thought_brief,
-        is_social=True,
     )
 
 

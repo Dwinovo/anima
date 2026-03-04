@@ -34,7 +34,6 @@ class SocialActionCommand:
     target_ref: str
     details: dict[str, Any]
     inner_thought_brief: str
-    is_social: bool = True
 
 
 SOCIAL_ACTION_TARGET_RULES: Final[dict[SocialActionVerb, frozenset[TargetTopology]]] = {

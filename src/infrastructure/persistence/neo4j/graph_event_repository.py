@@ -25,7 +25,6 @@ class Neo4jGraphEventRepository(GraphEventRepository):
         verb: str,
         subject_uuid: str,
         target_ref: str,
-        is_social: bool,
     ) -> None:
         """写入或更新目标数据。"""
         async with self._driver.session() as session:

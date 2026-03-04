@@ -40,7 +40,6 @@ def test_parse_social_action_tool_call_maps_to_event_command() -> None:
     assert command.target_ref == "board:session_demo"
     assert command.details["content"] == "hello anima"
     assert command.inner_thought_brief == "先发到广场试探反应"
-    assert command.is_social is True
 
 
 def test_parse_social_action_tool_call_rejects_invalid_topology() -> None:

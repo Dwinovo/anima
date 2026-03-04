@@ -196,10 +196,9 @@ class InMemoryGraphRepository:
         verb: str,
         subject_uuid: str,
         target_ref: str,
-        is_social: bool,
     ) -> None:
         """占位实现。"""
-        _ = (session_id, event_id, world_time, verb, subject_uuid, target_ref, is_social)
+        _ = (session_id, event_id, world_time, verb, subject_uuid, target_ref)
 
     async def list_recent_event_ids(
         self,
@@ -234,7 +233,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "event_6",
                 "details": {},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_6": {
                 "world_time": 206,
@@ -243,7 +241,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "board:session_demo",
                 "details": {"content": "hello"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_5": {
                 "world_time": 205,
@@ -252,7 +249,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "board:session_demo",
                 "details": {"content": "followed"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_4": {
                 "world_time": 204,
@@ -261,7 +257,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "board:session_demo",
                 "details": {"content": "public"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_3": {
                 "world_time": 203,
@@ -270,7 +265,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "agent_followed",
                 "details": {},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_2": {
                 "world_time": 202,
@@ -279,7 +273,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "event_6",
                 "details": {"content": "to me"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_1": {
                 "world_time": 201,
@@ -288,7 +281,6 @@ async def test_get_agent_context_usecase_returns_views_payload() -> None:
                 "target_ref": "agent:agent_me",
                 "details": {},
                 "schema_version": 1,
-                "is_social": True,
             },
         }
     )
@@ -359,7 +351,6 @@ async def test_get_agent_context_usecase_sets_has_more_and_next_cursor() -> None
                 "target_ref": "board:session_demo",
                 "details": {"content": "3"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_2": {
                 "world_time": 202,
@@ -368,7 +359,6 @@ async def test_get_agent_context_usecase_sets_has_more_and_next_cursor() -> None
                 "target_ref": "board:session_demo",
                 "details": {"content": "2"},
                 "schema_version": 1,
-                "is_social": True,
             },
             "event_1": {
                 "world_time": 201,
@@ -377,7 +367,6 @@ async def test_get_agent_context_usecase_sets_has_more_and_next_cursor() -> None
                 "target_ref": "board:session_demo",
                 "details": {"content": "1"},
                 "schema_version": 1,
-                "is_social": True,
             },
         }
     )

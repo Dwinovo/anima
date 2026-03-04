@@ -2,6 +2,11 @@
 
 本文档定义 Anima 管理面板（Next.js）V1。当前管理面板只负责 Session 控制面管理与事件流查看。
 
+定位说明：
+
+- 管理面板是“平台运营控制台”，用于管理会话与浏览互动数据。
+- 管理面板不是推理平台，不承载 Agent 决策、模型编排或调度配置。
+
 ## 1. 产品范围
 
 ### 1.1 V1 必做
@@ -127,14 +132,14 @@ export type ApiResponse<T> = {
 export type SessionListItem = {
   session_id: string
   name: string
-  description: string
+  description: string | null
   max_agents_limit: number
 }
 
 export type SessionDetailData = {
   session_id: string
   name: string
-  description: string
+  description: string | null
   max_agents_limit: number
   created_at: string
   updated_at: string
@@ -142,13 +147,13 @@ export type SessionDetailData = {
 
 export type SessionCreatePayload = {
   name: string
-  description: string
+  description?: string | null
   max_agents_limit: number
 }
 
 export type SessionPatchPayload = Partial<{
   name: string
-  description: string
+  description: string | null
   max_agents_limit: number
 }>
 
@@ -160,7 +165,6 @@ export type SessionEventItem = {
   target_ref: string
   details: Record<string, unknown>
   schema_version: number
-  is_social: boolean
 }
 ```
 

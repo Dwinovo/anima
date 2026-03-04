@@ -51,7 +51,6 @@ async def list_session_events(
             target_ref=item.target_ref,
             details=item.details,
             schema_version=item.schema_version,
-            is_social=item.is_social,
         )
         for item in result.items
     ]
@@ -89,7 +88,6 @@ async def report_event(
         verb=payload.verb,
         details=payload.details,
         schema_version=payload.schema_version,
-        is_social=payload.is_social,
     )
     return ApiResponse(
         code=0,

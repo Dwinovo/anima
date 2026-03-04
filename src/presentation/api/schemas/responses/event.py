@@ -30,7 +30,6 @@ class EventListItem(BaseModel):
     target_ref: str
     details: dict[str, Any]
     schema_version: int
-    is_social: bool
 
     model_config = ConfigDict(
         extra="forbid",

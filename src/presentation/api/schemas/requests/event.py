@@ -45,10 +45,6 @@ class EventReportRequest(BaseModel):
         ge=1,
         description="事件载荷结构版本。",
     )
-    is_social: bool = Field(
-        default=True,
-        description="是否属于社交类事件。",
-    )
 
     @field_validator("subject_uuid", "verb", "target_ref")
     @classmethod

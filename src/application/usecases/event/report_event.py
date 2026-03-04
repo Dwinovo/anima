@@ -37,7 +37,6 @@ class ReportEventUseCase:
         verb: str,
         details: dict[str, Any],
         schema_version: int,
-        is_social: bool,
     ) -> EventReportResult:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
@@ -62,7 +61,6 @@ class ReportEventUseCase:
                 "target_ref": target_ref,
                 "details": details,
                 "schema_version": schema_version,
-                "is_social": is_social,
             },
         )
         await self._graph_event_repo.upsert_event(
@@ -72,7 +70,6 @@ class ReportEventUseCase:
             verb=verb,
             subject_uuid=subject_uuid,
             target_ref=target_ref,
-            is_social=is_social,
         )
         return EventReportResult(
             session_id=session_id,

@@ -26,7 +26,7 @@ class EventSearchItem:
     target_ref: str
     details: dict[str, Any]
     schema_version: int
-    is_social: bool
+
 
 @dataclass(slots=True)
 class EventListResult:
