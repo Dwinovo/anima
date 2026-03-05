@@ -11,13 +11,13 @@ def test_session_create_request_accepts_core_fields() -> None:
     payload = {
         "name": "Alpha Session",
         "description": "demo",
-        "max_agents_limit": 100,
+        "max_entities_limit": 100,
     }
 
     request = SessionCreateRequest.model_validate(payload)
 
     assert request.name == "Alpha Session"
-    assert request.max_agents_limit == 100
+    assert request.max_entities_limit == 100
 
 
 def test_session_create_request_rejects_client_session_id() -> None:
@@ -27,7 +27,7 @@ def test_session_create_request_rejects_client_session_id() -> None:
             {
                 "name": "Alpha Session",
                 "session_id": "session_alpha",
-                "max_agents_limit": 100,
+                "max_entities_limit": 100,
             }
         )
 
@@ -38,9 +38,9 @@ def test_session_patch_request_accepts_core_patch_fields() -> None:
         {
             "name": "Alpha2",
             "description": "Alpha2",
-            "max_agents_limit": 120,
+            "max_entities_limit": 120,
         }
     )
     assert request.name == "Alpha2"
     assert request.description == "Alpha2"
-    assert request.max_agents_limit == 120
+    assert request.max_entities_limit == 120

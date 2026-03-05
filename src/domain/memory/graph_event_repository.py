@@ -4,7 +4,7 @@ from typing import Protocol
 
 
 class GraphEventRepository(Protocol):
-    """图谱记忆仓储（仅存轻量骨架拓扑）"""
+    """图谱记忆仓储（仅存轻量骨架拓扑）。"""
 
     async def upsert_event(
         self,
@@ -16,7 +16,7 @@ class GraphEventRepository(Protocol):
         subject_uuid: str,
         target_ref: str,
     ) -> None:
-        """写入事件骨架（惰性建点 + 关系建立）"""
+        """写入事件骨架（Entity-Event-Entity/Object 拓扑）。"""
 
     async def list_recent_event_ids(
         self,
@@ -26,4 +26,4 @@ class GraphEventRepository(Protocol):
         before_world_time: int | None = None,
         before_event_id: str | None = None,
     ) -> list[str]:
-        """按时间倒序列出近期事件候选（recent-only）"""
+        """按时间倒序列出近期事件候选（recent-only）。"""

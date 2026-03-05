@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         user=settings.neo4j_user,
         password=settings.neo4j_password,
     )
+    await app.state.neo4j.ensure_schema()
     try:
         yield
     finally:

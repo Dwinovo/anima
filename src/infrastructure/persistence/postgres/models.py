@@ -23,8 +23,8 @@ class SessionModel(Base):
     # Session 描述（全局 context）
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # 配额控制：max_agents_limit（非常关键）
-    max_agents_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    # 配额控制：max_entities_limit（非常关键）
+    max_entities_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
 
     # 审计字段
     created_at: Mapped[datetime] = mapped_column(

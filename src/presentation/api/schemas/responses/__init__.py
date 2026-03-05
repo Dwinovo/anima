@@ -1,14 +1,14 @@
-from src.presentation.api.schemas.responses.agent import (
-    AgentContextData,
-    AgentContextEventItem,
-    AgentContextEventListView,
-    AgentContextHotItem,
-    AgentContextHotListView,
-    AgentContextViews,
-    AgentContextWorldSnapshot,
-    AgentDetailData,
-    AgentRegisterData,
-    AgentTokenRefreshData,
+from src.presentation.api.schemas.responses.entity import (
+    EntityContextData,
+    EntityContextEventItem,
+    EntityContextEventListView,
+    EntityContextHotItem,
+    EntityContextHotListView,
+    EntityContextViews,
+    EntityContextWorldSnapshot,
+    EntityDetailData,
+    EntityRegisterData,
+    EntityTokenRefreshData,
 )
 from src.presentation.api.schemas.responses.envelope import (
     ApiResponse,
@@ -26,25 +26,21 @@ from src.presentation.api.schemas.responses.session import (
     SessionListData,
     SessionListItem,
 )
-from src.presentation.api.schemas.responses.social_action import (
-    SocialActionItemData,
-    SocialActionListData,
-)
 
 __all__ = [
     "ApiResponse",
     "SuccessResponse",
     "ErrorResponse",
-    "AgentContextData",
-    "AgentContextEventListView",
-    "AgentContextEventItem",
-    "AgentContextHotItem",
-    "AgentContextHotListView",
-    "AgentContextViews",
-    "AgentContextWorldSnapshot",
-    "AgentDetailData",
-    "AgentRegisterData",
-    "AgentTokenRefreshData",
+    "EntityContextData",
+    "EntityContextEventListView",
+    "EntityContextEventItem",
+    "EntityContextHotItem",
+    "EntityContextHotListView",
+    "EntityContextViews",
+    "EntityContextWorldSnapshot",
+    "EntityDetailData",
+    "EntityRegisterData",
+    "EntityTokenRefreshData",
     "EventListData",
     "EventListItem",
     "EventReportData",
@@ -52,6 +48,4 @@ __all__ = [
     "SessionDetailData",
     "SessionListData",
     "SessionListItem",
-    "SocialActionItemData",
-    "SocialActionListData",
 ]

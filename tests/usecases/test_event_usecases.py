@@ -8,7 +8,7 @@ import pytest
 from src.application.dto.event import EventReportResult
 from src.application.usecases.event.list_session_events import ListSessionEventsUseCase
 from src.application.usecases.event.report_event import ReportEventUseCase
-from src.core.exceptions import AgentNotFoundException, SessionNotFoundException
+from src.core.exceptions import EntityNotFoundException, SessionNotFoundException
 from src.domain.session.entities import Session
 
 
@@ -30,7 +30,7 @@ class InMemorySessionRepository:
         *,
         session_id: str,
         name: str | None = None,
-        max_agents_limit: int,
+        max_entities_limit: int,
         description: str | None = None,
     ) -> Session:
         """创建 Session 并返回实体。"""
@@ -39,19 +39,19 @@ class InMemorySessionRepository:
             session_id=session_id,
             name=name or session_id,
             description=description,
-            max_agents_limit=max_agents_limit,
+            max_entities_limit=max_entities_limit,
             created_at=now,
             updated_at=now,
         )
         self._sessions[session_id] = created
         return created
 
-    async def update_quota(self, *, session_id: str, max_agents_limit: int) -> None:
+    async def update_quota(self, *, session_id: str, max_entities_limit: int) -> None:
         """更新 Session 配额。"""
         existing = self._sessions.get(session_id)
         if existing is None:
             return
-        existing.max_agents_limit = max_agents_limit
+        existing.max_entities_limit = max_entities_limit
 
     async def delete(self, *, session_id: str) -> None:
         """删除 Session。"""
@@ -80,54 +80,54 @@ class InMemoryEventPayloadRepository:
 
 
 class InMemoryProfileRepository:
-    """Agent Profile 仓储测试替身。"""
+    """Entity Profile 仓储测试替身。"""
 
-    def __init__(self, existing_agent_ids: set[str] | None = None) -> None:
+    def __init__(self, existing_entity_ids: set[str] | None = None) -> None:
         """初始化对象并注入所需依赖。"""
-        self._existing_agent_ids = existing_agent_ids or set()
+        self._existing_entity_ids = existing_entity_ids or set()
 
     async def save(
         self,
         *,
         session_id: str,
-        agent_id: str,
+        entity_id: str,
         profile_json: str,
         ttl_seconds: int | None = None,
     ) -> None:
         """占位实现：事件上报测试不会用到此方法。"""
-        _ = (session_id, agent_id, profile_json, ttl_seconds)
+        _ = (session_id, entity_id, profile_json, ttl_seconds)
 
-    async def get(self, *, session_id: str, agent_id: str) -> str | None:
-        """读取 Agent 画像，存在时返回占位 JSON。"""
+    async def get(self, *, session_id: str, entity_id: str) -> str | None:
+        """读取 Entity 画像，存在时返回占位 JSON。"""
         _ = session_id
-        if agent_id in self._existing_agent_ids:
+        if entity_id in self._existing_entity_ids:
             return '{"name":"demo"}'
         return None
 
-    async def delete(self, *, session_id: str, agent_id: str) -> None:
+    async def delete(self, *, session_id: str, entity_id: str) -> None:
         """占位实现：事件上报测试不会用到此方法。"""
-        _ = (session_id, agent_id)
+        _ = (session_id, entity_id)
 
     async def claim_display_name(
         self,
         *,
         session_id: str,
-        agent_id: str,
+        entity_id: str,
         display_name: str,
     ) -> bool:
         """占位实现：事件上报测试不会用到此方法。"""
-        _ = (session_id, agent_id, display_name)
+        _ = (session_id, entity_id, display_name)
         return False
 
     async def release_display_name(
         self,
         *,
         session_id: str,
-        agent_id: str,
+        entity_id: str,
         display_name: str,
     ) -> None:
         """占位实现：事件上报测试不会用到此方法。"""
-        _ = (session_id, agent_id, display_name)
+        _ = (session_id, entity_id, display_name)
 
 
 class InMemoryGraphEventRepository:
@@ -229,18 +229,18 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
     await session_repo.create(
         session_id="session_demo",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     payload_repo = InMemoryEventPayloadRepository()
-    profile_repo = InMemoryProfileRepository(existing_agent_ids={"agent_a"})
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
     graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
     usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
 
     result = await usecase.execute(
         session_id="session_demo",
         world_time=12005,
-        subject_uuid="agent_a",
-        target_ref="agent_b",
+        subject_uuid="entity_a",
+        target_ref="entity_b",
         verb="POSTED",
         details={"content": "hello"},
         schema_version=1,
@@ -258,8 +258,8 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
     assert payload_doc["session_id"] == "session_demo"
     assert payload_doc["world_time"] == 12005
     assert payload_doc["verb"] == "POSTED"
-    assert payload_doc["subject_uuid"] == "agent_a"
-    assert payload_doc["target_ref"] == "agent_b"
+    assert payload_doc["subject_uuid"] == "entity_a"
+    assert payload_doc["target_ref"] == "entity_b"
     assert payload_doc["details"] == {"content": "hello"}
     assert payload_doc["schema_version"] == 1
     assert graph_repo._events[result.event_id]["verb"] == "POSTED"
@@ -269,7 +269,7 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
 async def test_report_event_usecase_raises_when_session_missing() -> None:
     """验证 Session 不存在时会抛出异常。"""
     payload_repo = InMemoryEventPayloadRepository()
-    profile_repo = InMemoryProfileRepository(existing_agent_ids={"agent_a"})
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
     graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
     usecase = ReportEventUseCase(InMemorySessionRepository(), profile_repo, payload_repo, graph_repo)
 
@@ -277,8 +277,8 @@ async def test_report_event_usecase_raises_when_session_missing() -> None:
         await usecase.execute(
             session_id="session_missing",
             world_time=1,
-            subject_uuid="agent_a",
-            target_ref="agent_b",
+            subject_uuid="entity_a",
+            target_ref="entity_b",
             verb="POSTED",
             details={},
             schema_version=1,
@@ -286,25 +286,25 @@ async def test_report_event_usecase_raises_when_session_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_report_event_usecase_raises_when_subject_agent_missing() -> None:
-    """验证 Subject Agent 不存在时会抛出异常。"""
+async def test_report_event_usecase_raises_when_subject_entity_missing() -> None:
+    """验证 Subject Entity 不存在时会抛出异常。"""
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     payload_repo = InMemoryEventPayloadRepository()
-    profile_repo = InMemoryProfileRepository(existing_agent_ids={"agent_other"})
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_other"})
     graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
     usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
 
-    with pytest.raises(AgentNotFoundException):
+    with pytest.raises(EntityNotFoundException):
         await usecase.execute(
             session_id="session_demo",
             world_time=1,
-            subject_uuid="agent_a",
-            target_ref="agent_b",
+            subject_uuid="entity_a",
+            target_ref="entity_b",
             verb="POSTED",
             details={},
             schema_version=1,
@@ -318,7 +318,7 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
     await session_repo.create(
         session_id="session_demo",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     payload_repo = InMemoryEventPayloadRepository()
     await payload_repo.put(
@@ -327,7 +327,7 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "session_id": "session_demo",
             "world_time": 300,
             "verb": "POSTED",
-            "subject_uuid": "agent_a",
+            "subject_uuid": "entity_a",
             "target_ref": "board:session_demo",
             "details": {"content": "third"},
             "schema_version": 1,
@@ -339,7 +339,7 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "session_id": "session_demo",
             "world_time": 200,
             "verb": "REPLIED",
-            "subject_uuid": "agent_b",
+            "subject_uuid": "entity_b",
             "target_ref": "event_003",
             "details": {"content": "second"},
             "schema_version": 1,
@@ -351,7 +351,7 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
             "session_id": "session_demo",
             "world_time": 100,
             "verb": "LIKED",
-            "subject_uuid": "agent_c",
+            "subject_uuid": "entity_c",
             "target_ref": "event_003",
             "details": {},
             "schema_version": 1,
@@ -383,7 +383,7 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
     await session_repo.create(
         session_id="session_demo",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     payload_repo = InMemoryEventPayloadRepository()
     await payload_repo.put(
@@ -392,7 +392,7 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "session_id": "session_demo",
             "world_time": 300,
             "verb": "POSTED",
-            "subject_uuid": "agent_a",
+            "subject_uuid": "entity_a",
             "target_ref": "board:session_demo",
             "details": {"content": "third"},
             "schema_version": 1,
@@ -404,7 +404,7 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "session_id": "session_demo",
             "world_time": 200,
             "verb": "REPLIED",
-            "subject_uuid": "agent_b",
+            "subject_uuid": "entity_b",
             "target_ref": "event_003",
             "details": {"content": "second"},
             "schema_version": 1,
@@ -416,7 +416,7 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
             "session_id": "session_demo",
             "world_time": 100,
             "verb": "LIKED",
-            "subject_uuid": "agent_c",
+            "subject_uuid": "entity_c",
             "target_ref": "event_003",
             "details": {},
             "schema_version": 1,

@@ -19,7 +19,7 @@ class SessionRepository(Protocol):
         *,
         session_id: str,
         name: str,
-        max_agents_limit: int,
+        max_entities_limit: int,
         description: str | None = None,
     ) -> Session:
         """创建会话配置并返回领域实体。"""
@@ -29,7 +29,7 @@ class SessionRepository(Protocol):
         self,
         *,
         session_id: str,
-        max_agents_limit: int,
+        max_entities_limit: int,
     ) -> None:
         """更新指定会话的配额上限。"""
         ...
@@ -40,7 +40,7 @@ class SessionRepository(Protocol):
         session_id: str,
         name: str | None = None,
         description: str | None = None,
-        max_agents_limit: int | None = None,
+        max_entities_limit: int | None = None,
     ) -> Session | None:
         """更新指定会话配置。"""
         ...

@@ -14,6 +14,17 @@ from src.presentation.api.schemas.responses.envelope import ApiResponse
 logger = logging.getLogger(__name__)
 
 
+def _to_json_safe(value: Any) -> Any:
+    """将任意对象转换为可 JSON 序列化结构。"""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _to_json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_json_safe(item) for item in value]
+    return str(value)
+
+
 def _json_response(*, http_status: int, code: int, message: str, data: Any | None = None) -> JSONResponse:
     """构建统一格式的 JSON 响应。"""
     payload = ApiResponse(code=code, message=message, data=data).model_dump()
@@ -26,7 +37,7 @@ async def request_validation_exception_handler(
 ) -> JSONResponse:
     # 400 - request body/query/path validation errors
     """执行 `request_validation_exception_handler` 相关逻辑。"""
-    details = {"errors": exc.errors()}
+    details = {"errors": _to_json_safe(exc.errors())}
     return _json_response(
         http_status=status.HTTP_400_BAD_REQUEST,
         code=status.HTTP_400_BAD_REQUEST,

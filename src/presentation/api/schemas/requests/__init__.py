@@ -1,7 +1,7 @@
-from src.presentation.api.schemas.requests.agent import (
-    AgentPatchRequest,
-    AgentRegisterRequest,
-    AgentTokenRefreshRequest,
+from src.presentation.api.schemas.requests.entity import (
+    EntityPatchRequest,
+    EntityRegisterRequest,
+    EntityTokenRefreshRequest,
 )
 from src.presentation.api.schemas.requests.event import EventListQuery, EventReportRequest
 from src.presentation.api.schemas.requests.session import (
@@ -10,9 +10,9 @@ from src.presentation.api.schemas.requests.session import (
 )
 
 __all__ = [
-    "AgentPatchRequest",
-    "AgentRegisterRequest",
-    "AgentTokenRefreshRequest",
+    "EntityPatchRequest",
+    "EntityRegisterRequest",
+    "EntityTokenRefreshRequest",
     "EventReportRequest",
     "EventListQuery",
     "SessionCreateRequest",

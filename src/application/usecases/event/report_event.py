@@ -4,8 +4,8 @@ from typing import Any
 from uuid import uuid4
 
 from src.application.dto.event import EventReportResult
-from src.core.exceptions import AgentNotFoundException, SessionNotFoundException
-from src.domain.agent.profile_repository import AgentProfileRepository
+from src.core.exceptions import EntityNotFoundException, SessionNotFoundException
+from src.domain.entity.profile_repository import EntityProfileRepository
 from src.domain.memory.event_payload_repository import EventPayloadRepository
 from src.domain.memory.graph_event_repository import GraphEventRepository
 from src.domain.session.repository import SessionRepository
@@ -17,7 +17,7 @@ class ReportEventUseCase:
     def __init__(
         self,
         session_repo: SessionRepository,
-        profile_repo: AgentProfileRepository,
+        profile_repo: EntityProfileRepository,
         event_payload_repo: EventPayloadRepository,
         graph_event_repo: GraphEventRepository,
     ) -> None:
@@ -44,10 +44,10 @@ class ReportEventUseCase:
             raise SessionNotFoundException(session_id)
         subject_profile = await self._profile_repo.get(
             session_id=session_id,
-            agent_id=subject_uuid,
+            entity_id=subject_uuid,
         )
         if subject_profile is None:
-            raise AgentNotFoundException(session_id=session_id, uuid=subject_uuid)
+            raise EntityNotFoundException(session_id=session_id, uuid=subject_uuid)
 
         event_id = f"event_{uuid4().hex}"
         # 先写载荷（Mongo），再写骨架（Neo4j），遵循规范中的双写顺序。

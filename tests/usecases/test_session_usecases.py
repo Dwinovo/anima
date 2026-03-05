@@ -32,7 +32,7 @@ class InMemorySessionRepository:
         *,
         session_id: str,
         name: str,
-        max_agents_limit: int,
+        max_entities_limit: int,
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
@@ -41,19 +41,19 @@ class InMemorySessionRepository:
             session_id=session_id,
             name=name,
             description=description,
-            max_agents_limit=max_agents_limit,
+            max_entities_limit=max_entities_limit,
             created_at=now,
             updated_at=now,
         )
         self._sessions[session_id] = created
         return created
 
-    async def update_quota(self, *, session_id: str, max_agents_limit: int) -> None:
+    async def update_quota(self, *, session_id: str, max_entities_limit: int) -> None:
         """更新目标资源的状态或字段。"""
         existing = self._sessions.get(session_id)
         if existing is None:
             return
-        existing.max_agents_limit = max_agents_limit
+        existing.max_entities_limit = max_entities_limit
         existing.updated_at = datetime.now(timezone.utc)
 
     async def delete(self, *, session_id: str) -> None:
@@ -66,7 +66,7 @@ class InMemorySessionRepository:
         session_id: str,
         name: str | None = None,
         description: str | None = None,
-        max_agents_limit: int | None = None,
+        max_entities_limit: int | None = None,
     ) -> Session | None:
         """更新指定 Session。"""
         existing = self._sessions.get(session_id)
@@ -76,8 +76,8 @@ class InMemorySessionRepository:
             existing.name = name
         if description is not None:
             existing.description = description
-        if max_agents_limit is not None:
-            existing.max_agents_limit = max_agents_limit
+        if max_entities_limit is not None:
+            existing.max_entities_limit = max_entities_limit
         existing.updated_at = datetime.now(timezone.utc)
         return existing
 
@@ -91,13 +91,13 @@ async def test_create_session_usecase_generates_server_side_uuid() -> None:
     created = await usecase.execute(
         name="Alpha Session",
         description="social world",
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
 
     UUID(created.session_id)
     assert created.name == "Alpha Session"
     assert created.description == "social world"
-    assert created.max_agents_limit == 100
+    assert created.max_entities_limit == 100
 
 
 @pytest.mark.asyncio
@@ -108,7 +108,7 @@ async def test_delete_session_usecase_deletes_existing_session() -> None:
         session_id="session_deadbeef",
         name="Deadbeef Session",
         description=None,
-        max_agents_limit=10,
+        max_entities_limit=10,
     )
     usecase = DeleteSessionUseCase(repo)
 
@@ -135,13 +135,13 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
         session_id="session_alpha",
         name="Alpha Session",
         description="alpha desc",
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     await session_repo.create(
         session_id="session_beta",
         name="Beta Session",
         description=None,
-        max_agents_limit=50,
+        max_entities_limit=50,
     )
     usecase = ListSessionsUseCase(session_repo)
 
@@ -151,11 +151,11 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
     assert result[0].session_id == "session_alpha"
     assert result[0].name == "Alpha Session"
     assert result[0].description == "alpha desc"
-    assert result[0].max_agents_limit == 100
+    assert result[0].max_entities_limit == 100
     assert result[1].session_id == "session_beta"
     assert result[1].name == "Beta Session"
     assert result[1].description is None
-    assert result[1].max_agents_limit == 50
+    assert result[1].max_entities_limit == 50
 
 
 @pytest.mark.asyncio
@@ -166,7 +166,7 @@ async def test_get_session_usecase_returns_existing_session() -> None:
         session_id="session_alpha",
         name="Alpha Session",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     usecase = GetSessionUseCase(session_repo)
 
@@ -174,7 +174,7 @@ async def test_get_session_usecase_returns_existing_session() -> None:
 
     assert result.session_id == "session_alpha"
     assert result.name == "Alpha Session"
-    assert result.max_agents_limit == 100
+    assert result.max_entities_limit == 100
     assert result.created_at is not None
     assert result.updated_at is not None
 
@@ -187,7 +187,7 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
         session_id="session_alpha",
         name="Alpha Session",
         description=None,
-        max_agents_limit=100,
+        max_entities_limit=100,
     )
     usecase = PatchSessionUseCase(session_repo)
 
@@ -195,13 +195,13 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
         session_id="session_alpha",
         name="Alpha Session V2",
         description="new desc",
-        max_agents_limit=120,
+        max_entities_limit=120,
     )
 
     assert result.session_id == "session_alpha"
     assert result.name == "Alpha Session V2"
     assert result.description == "new desc"
-    assert result.max_agents_limit == 120
+    assert result.max_entities_limit == 120
 
 
 @pytest.mark.asyncio

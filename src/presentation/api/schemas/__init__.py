@@ -1,4 +1,4 @@
-from src.presentation.api.schemas.responses.agent import AgentRegisterData
+from src.presentation.api.schemas.responses.entity import EntityRegisterData
 from src.presentation.api.schemas.responses.envelope import (
     ApiResponse,
     ErrorResponse,
@@ -15,7 +15,7 @@ __all__ = [
     "ApiResponse",
     "SuccessResponse",
     "ErrorResponse",
-    "AgentRegisterData",
+    "EntityRegisterData",
     "SessionCreateData",
     "SessionDetailData",
     "SessionListData",

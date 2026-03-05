@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("session_id", sa.String(length=64), nullable=False),
         sa.Column("name", sa.String(length=128), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("max_agents_limit", sa.Integer(), nullable=False, server_default=sa.text("100")),
+        sa.Column("max_entities_limit", sa.Integer(), nullable=False, server_default=sa.text("100")),
         sa.Column("default_llm", sa.String(length=64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),

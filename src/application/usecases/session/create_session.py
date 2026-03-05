@@ -16,13 +16,13 @@ class CreateSessionUseCase:
         *,
         name: str,
         description: str | None,
-        max_agents_limit: int,
+        max_entities_limit: int,
     ) -> Session:
         """执行业务流程并返回结果。"""
         session_id = str(uuid4())
         return await self._session_repo.create(
             session_id=session_id,
             name=name,
-            max_agents_limit=max_agents_limit,
+            max_entities_limit=max_entities_limit,
             description=description,
         )

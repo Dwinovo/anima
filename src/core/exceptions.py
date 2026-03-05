@@ -38,17 +38,17 @@ class QuotaExceededException(AnimaException):
         super().__init__(
             status_code=403,
             code=40301,
-            message=f"Session {session_id} has reached max_agents_limit ({limit}).",
+            message=f"Session {session_id} has reached max_entities_limit ({limit}).",
         )
 
 
-class AgentNotFoundException(AnimaException):
+class EntityNotFoundException(AnimaException):
     def __init__(self, session_id: str, uuid: str) -> None:
         """初始化对象并注入所需依赖。"""
         super().__init__(
             status_code=404,
             code=40402,
-            message=f"Agent {uuid} not found in session {session_id}.",
+            message=f"Entity {uuid} not found in session {session_id}.",
         )
 
 

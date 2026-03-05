@@ -27,9 +27,9 @@ class SessionCreateData(BaseModel):
         description="Optional session description.",
     )
 
-    max_agents_limit: int = Field(
+    max_entities_limit: int = Field(
         ...,
-        description="Maximum allowed agents in this session.",
+        description="Maximum allowed entities in this session.",
         examples=[1000],
     )
 
@@ -50,7 +50,7 @@ class SessionDetailData(BaseModel):
     session_id: str
     name: str
     description: str | None
-    max_agents_limit: int
+    max_entities_limit: int
     created_at: datetime
     updated_at: datetime
 
@@ -68,7 +68,7 @@ class SessionListItem(BaseModel):
     session_id: str
     name: str
     description: str | None
-    max_agents_limit: int
+    max_entities_limit: int
 
     model_config = ConfigDict(
         extra="forbid",

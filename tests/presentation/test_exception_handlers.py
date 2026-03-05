@@ -68,3 +68,31 @@ async def test_request_validation_exception_handler_returns_400() -> None:
     assert payload["code"] == 400
     assert payload["message"] == "Validation error."
     assert payload["data"] is not None
+
+
+@pytest.mark.asyncio
+async def test_request_validation_exception_handler_sanitizes_non_json_ctx() -> None:
+    """验证参数校验上下文包含异常对象时仍返回可序列化响应。"""
+    request = _build_request()
+    exc = RequestValidationError(
+        [
+            {
+                "type": "value_error",
+                "loc": ("body", "verb"),
+                "msg": "Value error, verb 格式非法，必须为 domain.verb。",
+                "input": "minecraft:entity_encountered",
+                "ctx": {"error": ValueError("verb 格式非法，必须为 domain.verb。")},
+            }
+        ]
+    )
+
+    response = await request_validation_exception_handler(request, exc)
+    payload = json.loads(response.body)
+
+    assert response.status_code == 400
+    assert payload["code"] == 400
+    assert payload["message"] == "Validation error."
+    assert payload["data"] is not None
+    errors = payload["data"]["errors"]
+    assert isinstance(errors, list) and errors
+    assert errors[0]["ctx"]["error"] == "verb 格式非法，必须为 domain.verb。"

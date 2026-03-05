@@ -5,7 +5,7 @@
 定位说明：
 
 - 管理面板是“平台运营控制台”，用于管理会话与浏览互动数据。
-- 管理面板不是推理平台，不承载 Agent 决策、模型编排或调度配置。
+- 管理面板不是推理平台，不承载 Entity 决策、模型编排或调度配置。
 
 ## 1. 产品范围
 
@@ -20,7 +20,7 @@
 
 ### 1.2 V1 不做
 
-- Agent 注册/改名/下线（由客户端完成）
+- Entity 注册/改名/下线（由客户端完成）
 - 推理调度、模型管理
 - 向量检索与图谱可视化编辑
 
@@ -44,7 +44,7 @@
 
 - `name`（创建时必填，Session 展示名）
 - `description`（后端可选，管理面板可按产品策略要求必填）
-- `max_agents_limit`（创建时必填，正整数）
+- `max_entities_limit`（创建时必填，正整数）
 - `session_id`（服务端生成 UUID，创建后返回）
 
 说明：
@@ -68,20 +68,20 @@
 - `session_id`
 - `name`
 - `description`
-- `max_agents_limit`
+- `max_entities_limit`
 - 操作（查看、编辑、删除）
 
 创建弹窗字段：
 
 - `name`
 - `description`
-- `max_agents_limit`
+- `max_entities_limit`
 
 编辑弹窗字段：
 
 - `name`
 - `description`
-- `max_agents_limit`
+- `max_entities_limit`
 
 ## 4.2 `/sessions/[sessionId]` 会话详情页
 
@@ -90,7 +90,7 @@
 - `session_id`
 - `name`
 - `description`
-- `max_agents_limit`
+- `max_entities_limit`
 
 主体：
 
@@ -102,7 +102,7 @@
 ### 5.1 创建 Session
 
 1. 打开创建弹窗
-2. 填写 `name/description/max_agents_limit`
+2. 填写 `name/description/max_entities_limit`
 3. 调用 `POST /api/v1/sessions`
 4. 从响应中读取服务端生成的 `session_id`
 5. 刷新列表并提示成功
@@ -110,7 +110,7 @@
 ### 5.2 编辑 Session
 
 1. 进入编辑弹窗
-2. 修改 `name/description/max_agents_limit`
+2. 修改 `name/description/max_entities_limit`
 3. 调用 `PATCH /api/v1/sessions/{session_id}`
 4. 成功后刷新列表与详情数据
 
@@ -133,14 +133,14 @@ export type SessionListItem = {
   session_id: string
   name: string
   description: string | null
-  max_agents_limit: number
+  max_entities_limit: number
 }
 
 export type SessionDetailData = {
   session_id: string
   name: string
   description: string | null
-  max_agents_limit: number
+  max_entities_limit: number
   created_at: string
   updated_at: string
 }
@@ -148,13 +148,13 @@ export type SessionDetailData = {
 export type SessionCreatePayload = {
   name: string
   description?: string | null
-  max_agents_limit: number
+  max_entities_limit: number
 }
 
 export type SessionPatchPayload = Partial<{
   name: string
   description: string | null
-  max_agents_limit: number
+  max_entities_limit: number
 }>
 
 export type SessionEventItem = {

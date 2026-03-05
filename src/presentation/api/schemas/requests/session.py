@@ -26,11 +26,11 @@ class SessionCreateRequest(BaseModel):
         examples=["A social experiment session."],
     )
 
-    max_agents_limit: int = Field(
+    max_entities_limit: int = Field(
         ...,
         ge=1,
         le=100_000,
-        description="Maximum number of agents allowed in this session.",
+        description="Maximum number of entities allowed in this session.",
         examples=[1000],
     )
 
@@ -55,11 +55,11 @@ class SessionPatchRequest(BaseModel):
         max_length=1024,
         description="Session 描述。",
     )
-    max_agents_limit: int | None = Field(
+    max_entities_limit: int | None = Field(
         default=None,
         ge=1,
         le=100_000,
-        description="最大 Agent 上限。",
+        description="最大 Entity 上限。",
     )
     model_config = ConfigDict(
         extra="forbid",

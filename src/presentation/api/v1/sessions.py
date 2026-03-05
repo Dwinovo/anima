@@ -51,13 +51,13 @@ async def create_session(
     session = await usecase.execute(
         name=payload.name,
         description=payload.description,
-        max_agents_limit=payload.max_agents_limit,
+        max_entities_limit=payload.max_entities_limit,
     )
     data = SessionCreateData(
         session_id=session.session_id,
         name=session.name,
         description=session.description,
-        max_agents_limit=session.max_agents_limit,
+        max_entities_limit=session.max_entities_limit,
         created_at=session.created_at,
         updated_at=session.updated_at,
     )
@@ -85,7 +85,7 @@ async def list_sessions(
             session_id=item.session_id,
             name=item.name,
             description=item.description,
-            max_agents_limit=item.max_agents_limit,
+            max_entities_limit=item.max_entities_limit,
         )
         for item in sessions
     ]
@@ -115,7 +115,7 @@ async def get_session(
             session_id=session.session_id,
             name=session.name,
             description=session.description,
-            max_agents_limit=session.max_agents_limit,
+            max_entities_limit=session.max_entities_limit,
             created_at=session.created_at,
             updated_at=session.updated_at,
         ),
@@ -138,7 +138,7 @@ async def patch_session(
         session_id=session_id,
         name=payload.name,
         description=payload.description,
-        max_agents_limit=payload.max_agents_limit,
+        max_entities_limit=payload.max_entities_limit,
     )
     return ApiResponse(
         code=0,
@@ -147,7 +147,7 @@ async def patch_session(
             session_id=session.session_id,
             name=session.name,
             description=session.description,
-            max_agents_limit=session.max_agents_limit,
+            max_entities_limit=session.max_entities_limit,
             created_at=session.created_at,
             updated_at=session.updated_at,
         ),

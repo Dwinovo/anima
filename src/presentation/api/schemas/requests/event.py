@@ -19,21 +19,21 @@ class EventReportRequest(BaseModel):
         ...,
         min_length=1,
         max_length=128,
-        description="事件主语 Agent 标识。",
-        examples=["agent_a"],
+        description="事件主语 Entity 标识。",
+        examples=["entity_a"],
     )
     verb: str = Field(
         ...,
         min_length=1,
         max_length=64,
-        description="动作类型。",
-        examples=["POSTED"],
+        description="动作类型，必须采用 domain.verb 命名空间格式。",
+        examples=["social.posted"],
     )
     target_ref: str = Field(
         ...,
         min_length=1,
         max_length=128,
-        description="目标引用（如 agent_x 或 board:session_x）。",
+        description="目标引用（如 entity_x 或 board:session_x）。",
         examples=["board:session_demo"],
     )
     details: dict[str, Any] = Field(
@@ -46,12 +46,22 @@ class EventReportRequest(BaseModel):
         description="事件载荷结构版本。",
     )
 
-    @field_validator("subject_uuid", "verb", "target_ref")
+    @field_validator("subject_uuid", "target_ref")
     @classmethod
     def _validate_required_string(cls, value: str) -> str:
         """校验关键字符串字段非空。"""
         if not value:
             raise ValueError("关键字符串字段不能为空。")
+        return value
+
+    @field_validator("verb")
+    @classmethod
+    def _validate_verb_namespace(cls, value: str) -> str:
+        """校验 verb 必须满足 domain.verb 命名空间格式。"""
+        if value == "":
+            raise ValueError("verb 不能为空。")
+        if VERB_NAMESPACE_PATTERN.match(value) is None:
+            raise ValueError("verb 格式非法，必须为 domain.verb。")
         return value
 
     model_config = ConfigDict(
@@ -61,6 +71,7 @@ class EventReportRequest(BaseModel):
 
 
 CURSOR_PATTERN = re.compile(r"^\d+:[A-Za-z0-9_-]+$")
+VERB_NAMESPACE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 
 class EventListQuery(BaseModel):

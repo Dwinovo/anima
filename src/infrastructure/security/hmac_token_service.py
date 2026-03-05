@@ -8,7 +8,7 @@ from time import time
 from uuid import uuid4
 
 from src.core.exceptions import AuthenticationFailedException
-from src.domain.agent.token_service import TokenClaims
+from src.domain.entity.token_service import TokenClaims
 
 
 class HmacTokenService:
@@ -33,7 +33,7 @@ class HmacTokenService:
         self,
         *,
         session_id: str,
-        agent_id: str,
+        entity_id: str,
         token_version: int,
     ) -> str:
         """签发 access token。"""
@@ -41,7 +41,7 @@ class HmacTokenService:
         payload = {
             "typ": self._ACCESS_TOKEN_TYPE,
             "sid": session_id,
-            "aid": agent_id,
+            "eid": entity_id,
             "ver": token_version,
             "iat": now,
             "exp": now + self.access_token_ttl_seconds,
@@ -52,7 +52,7 @@ class HmacTokenService:
         self,
         *,
         session_id: str,
-        agent_id: str,
+        entity_id: str,
         token_version: int,
         refresh_jti: str,
     ) -> str:
@@ -61,7 +61,7 @@ class HmacTokenService:
         payload = {
             "typ": self._REFRESH_TOKEN_TYPE,
             "sid": session_id,
-            "aid": agent_id,
+            "eid": entity_id,
             "ver": token_version,
             "jti": refresh_jti,
             "iat": now,
@@ -81,7 +81,7 @@ class HmacTokenService:
         payload = self._json_loads(payload_part)
         token_type = payload.get("typ")
         session_id = payload.get("sid")
-        agent_id = payload.get("aid")
+        entity_id = payload.get("eid")
         token_version = payload.get("ver")
         expires_at = payload.get("exp")
         refresh_jti = payload.get("jti")
@@ -90,8 +90,8 @@ class HmacTokenService:
             raise AuthenticationFailedException("Invalid token type.")
         if not isinstance(session_id, str) or not session_id:
             raise AuthenticationFailedException("Invalid session in token.")
-        if not isinstance(agent_id, str) or not agent_id:
-            raise AuthenticationFailedException("Invalid agent in token.")
+        if not isinstance(entity_id, str) or not entity_id:
+            raise AuthenticationFailedException("Invalid entity in token.")
         if not isinstance(token_version, int) or token_version <= 0:
             raise AuthenticationFailedException("Invalid token version.")
         if not isinstance(expires_at, int):
@@ -104,7 +104,7 @@ class HmacTokenService:
         return TokenClaims(
             token_type=token_type,
             session_id=session_id,
-            agent_id=agent_id,
+            entity_id=entity_id,
             token_version=token_version,
             expires_at=expires_at,
             refresh_jti=refresh_jti if isinstance(refresh_jti, str) else None,

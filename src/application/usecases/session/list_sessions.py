@@ -12,7 +12,7 @@ class SessionListInfo:
     session_id: str
     name: str
     description: str | None
-    max_agents_limit: int
+    max_entities_limit: int
 
 
 class ListSessionsUseCase:
@@ -32,7 +32,7 @@ class ListSessionsUseCase:
                     session_id=session.session_id,
                     name=session.name,
                     description=session.description,
-                    max_agents_limit=session.max_agents_limit,
+                    max_entities_limit=session.max_entities_limit,
                 )
             )
         return results

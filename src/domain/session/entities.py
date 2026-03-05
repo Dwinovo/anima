@@ -9,6 +9,6 @@ class Session:
     session_id: str
     name: str
     description: str | None
-    max_agents_limit: int
+    max_entities_limit: int
     created_at: datetime
     updated_at: datetime

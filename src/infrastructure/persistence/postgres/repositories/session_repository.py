@@ -23,7 +23,7 @@ class PostgresSessionRepository(SessionRepository):
             session_id=model.session_id,
             name=model.name,
             description=model.description,
-            max_agents_limit=model.max_agents_limit,
+            max_entities_limit=model.max_entities_limit,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -47,14 +47,14 @@ class PostgresSessionRepository(SessionRepository):
         *,
         session_id: str,
         name: str,
-        max_agents_limit: int,
+        max_entities_limit: int,
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
         payload: dict[str, object] = {
             "session_id": session_id,
             "name": name,
-            "max_agents_limit": max_agents_limit,
+            "max_entities_limit": max_entities_limit,
             "description": description,
         }
         model = SessionModel(**payload)
@@ -63,13 +63,13 @@ class PostgresSessionRepository(SessionRepository):
         await self._session.refresh(model)
         return self._to_domain(model)
 
-    async def update_quota(self, *, session_id: str, max_agents_limit: int) -> None:
+    async def update_quota(self, *, session_id: str, max_entities_limit: int) -> None:
         """更新目标资源的状态或字段。"""
         stmt = select(SessionModel).where(SessionModel.session_id == session_id)
         model = await self._session.scalar(stmt)
         if model is None:
             return
-        model.max_agents_limit = max_agents_limit
+        model.max_entities_limit = max_entities_limit
         await self._session.commit()
 
     async def delete(self, *, session_id: str) -> None:
@@ -83,7 +83,7 @@ class PostgresSessionRepository(SessionRepository):
         session_id: str,
         name: str | None = None,
         description: str | None = None,
-        max_agents_limit: int | None = None,
+        max_entities_limit: int | None = None,
     ) -> Session | None:
         """更新指定会话并返回最新实体。"""
         stmt = select(SessionModel).where(SessionModel.session_id == session_id)
@@ -95,8 +95,8 @@ class PostgresSessionRepository(SessionRepository):
             model.name = name
         if description is not None:
             model.description = description
-        if max_agents_limit is not None:
-            model.max_agents_limit = max_agents_limit
+        if max_entities_limit is not None:
+            model.max_entities_limit = max_entities_limit
         await self._session.commit()
         await self._session.refresh(model)
         return self._to_domain(model)
