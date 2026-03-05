@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import TypeVar, cast
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, Query, Request
 from neo4j import AsyncDriver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -373,19 +374,35 @@ async def require_session_access_claims(
     )
 
 
-async def validate_entity_access_token(
-    *,
-    token: str,
+@dataclass(slots=True)
+class WsAccessClaimsResult:
+    """WebSocket 鉴权结果。"""
+
+    claims: TokenClaims | None
+    error: AuthenticationFailedException | None = None
+
+
+async def require_entity_ws_access_claims(
     session_id: str,
     entity_id: str,
-    token_service: EntityTokenService,
-    auth_state_repo: EntityAuthStateRepository,
-) -> TokenClaims:
-    """校验 WebSocket query token。"""
-    return await _validate_access_claims(
-        token=token,
-        session_id=session_id,
-        expected_entity_id=entity_id,
-        token_service=token_service,
-        auth_state_repo=auth_state_repo,
-    )
+    access_token: str | None = Query(default=None),
+    token_service: EntityTokenService = Depends(get_token_service),
+    auth_state_repo: EntityAuthStateRepository = Depends(get_auth_state_repo),
+) -> WsAccessClaimsResult:
+    """校验 WebSocket query access token，并返回可用于回包的结果对象。"""
+    if access_token is None:
+        return WsAccessClaimsResult(
+            claims=None,
+            error=AuthenticationFailedException("Missing access token."),
+        )
+    try:
+        claims = await _validate_access_claims(
+            token=access_token,
+            session_id=session_id,
+            expected_entity_id=entity_id,
+            token_service=token_service,
+            auth_state_repo=auth_state_repo,
+        )
+    except AuthenticationFailedException as exc:
+        return WsAccessClaimsResult(claims=None, error=exc)
+    return WsAccessClaimsResult(claims=claims, error=None)

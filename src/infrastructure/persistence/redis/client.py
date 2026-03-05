@@ -31,6 +31,10 @@ class RedisClient:
         """关闭 Redis 连接并释放底层资源。"""
         await self._redis.aclose()
 
+    async def ping(self) -> bool:
+        """检测 Redis 连通性。"""
+        return bool(await self._redis.ping())
+
     async def set_value(self, key: str, value: str, ttl_seconds: int | None = None) -> None:
         """以原子方式写入字符串键值，可选设置过期时间。"""
         if ttl_seconds is None:

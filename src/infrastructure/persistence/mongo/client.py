@@ -16,6 +16,11 @@ class MongoManager:
         """执行 `db` 相关逻辑。"""
         return self._db
 
+    async def ping(self) -> bool:
+        """检测 MongoDB 连通性。"""
+        result = await self._db.command("ping")
+        return bool(result.get("ok"))
+
     async def close(self) -> None:
         # motor 的 client 关闭是同步方法
         """执行 `close` 相关逻辑。"""

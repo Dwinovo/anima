@@ -4,7 +4,7 @@ import asyncio
 from contextlib import suppress
 from time import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from fastapi.websockets import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -18,21 +18,19 @@ from src.application.usecases.entity.refresh_entity_tokens import RefreshEntityT
 from src.application.usecases.entity.register_entity import RegisterEntityUseCase
 from src.application.usecases.entity.unregister_entity import UnregisterEntityUseCase
 from src.core.exceptions import AnimaException
-from src.domain.entity.auth_state_repository import EntityAuthStateRepository
-from src.domain.entity.token_service import EntityTokenService, TokenClaims
+from src.domain.entity.token_service import TokenClaims
 from src.presentation.api.constants.http_status import ENTITY_REGISTERED, ENTITY_REMOVED, HTTP_200_OK
 from src.presentation.api.dependencies import (
-    get_auth_state_repo,
+    WsAccessClaimsResult,
     get_entity_context_usecase,
     get_get_entity_usecase,
     get_maintain_entity_presence_usecase,
     get_patch_entity_usecase,
     get_refresh_entity_tokens_usecase,
     get_register_entity_usecase,
-    get_token_service,
     get_unregister_entity_usecase,
     require_entity_access_claims,
-    validate_entity_access_token,
+    require_entity_ws_access_claims,
 )
 from src.presentation.api.schemas.requests.entity import (
     EntityPatchRequest,
@@ -290,41 +288,22 @@ async def entity_presence(
     websocket: WebSocket,
     session_id: str,
     entity_id: str,
-    access_token: str | None = Query(default=None),
+    auth_result: WsAccessClaimsResult = Depends(require_entity_ws_access_claims),
     usecase: MaintainEntityPresenceUseCase = Depends(get_maintain_entity_presence_usecase),
-    token_service: EntityTokenService = Depends(get_token_service),
-    auth_state_repo: EntityAuthStateRepository = Depends(get_auth_state_repo),
 ) -> None:
     """维护 Entity Presence 长连接心跳。"""
     await websocket.accept()
-    if access_token is None:
+    if auth_result.error is not None:
         await websocket.send_json(
             {
                 "type": "error",
-                "code": 40101,
-                "message": "Missing access token.",
+                "code": auth_result.error.code,
+                "message": auth_result.error.message,
             }
         )
         await websocket.close(code=1008)
         return
-    try:
-        await validate_entity_access_token(
-            token=access_token,
-            session_id=session_id,
-            entity_id=entity_id,
-            token_service=token_service,
-            auth_state_repo=auth_state_repo,
-        )
-    except AnimaException as exc:
-        await websocket.send_json(
-            {
-                "type": "error",
-                "code": exc.code,
-                "message": exc.message,
-            }
-        )
-        await websocket.close(code=1008)
-        return
+
     try:
         await usecase.on_connect(
             session_id=session_id,
