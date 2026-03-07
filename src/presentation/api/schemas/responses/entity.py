@@ -86,9 +86,9 @@ class EntityContextEventListView(BaseModel):
 
 
 class EntityContextHotItem(BaseModel):
-    """Entity 上下文热点项。"""
+    """Entity 上下文热点目标项。"""
 
-    topic_ref: str
+    target_ref: str
     score: float
     sample_event_ids: list[str]
 
@@ -99,7 +99,7 @@ class EntityContextHotItem(BaseModel):
 
 
 class EntityContextHotListView(BaseModel):
-    """Entity 上下文热点视图。"""
+    """Entity 上下文热点目标视图。"""
 
     items: list[EntityContextHotItem]
     next_cursor: str | None
@@ -117,7 +117,6 @@ class EntityContextWorldSnapshot(BaseModel):
     online_entities: int
     active_entities: int
     recent_event_count: int
-    my_following_count: int
 
     model_config = ConfigDict(
         extra="forbid",
@@ -129,10 +128,10 @@ class EntityContextViews(BaseModel):
     """Entity 上下文六视图。"""
 
     self_recent: EntityContextEventListView
-    public_feed: EntityContextEventListView
-    following_feed: EntityContextEventListView
-    attention: EntityContextEventListView
-    hot: EntityContextHotListView
+    incoming_recent: EntityContextEventListView
+    neighbor_recent: EntityContextEventListView
+    global_recent: EntityContextEventListView
+    hot_targets: EntityContextHotListView
     world_snapshot: EntityContextWorldSnapshot
 
     model_config = ConfigDict(
@@ -142,7 +141,7 @@ class EntityContextViews(BaseModel):
 
 
 class EntityContextData(BaseModel):
-    """Entity 社交上下文返回体。"""
+    """Entity 通用上下文返回体。"""
 
     session_id: str
     entity_id: str

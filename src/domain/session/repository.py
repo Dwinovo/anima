@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from src.domain.session.actions import SessionAction
 from src.domain.session.entities import Session
 
 
@@ -20,6 +21,7 @@ class SessionRepository(Protocol):
         session_id: str,
         name: str,
         max_entities_limit: int,
+        actions: tuple[SessionAction, ...],
         description: str | None = None,
     ) -> Session:
         """创建会话配置并返回领域实体。"""
@@ -41,6 +43,7 @@ class SessionRepository(Protocol):
         name: str | None = None,
         description: str | None = None,
         max_entities_limit: int | None = None,
+        actions: tuple[SessionAction, ...] | None = None,
     ) -> Session | None:
         """更新指定会话配置。"""
         ...

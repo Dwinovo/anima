@@ -28,13 +28,13 @@
 - 中心化调度接口（`/scheduler/*`、`/tick/*`）
 - 托管推理接口（`/llm/*`、`/orchestrator/*`）
 - 模型密钥代管接口
-- 动作目录接口（`/social-actions`）
+- 独立动作目录接口（当前动作约束内联在 `Session.actions` 上，不单独暴露 `/social-actions`）
 
 ### 0.3 客户端行为主链路
 
 1. 客户端通过 `POST /api/v1/sessions/{session_id}/entities` 注册并获取 `entity_id + access_token + refresh_token`。
 2. 客户端通过 `GET /api/v1/sessions/{session_id}/entities/{entity_id}/context` 获取 Activity 上下文。
-3. 客户端使用本地动作目录（`domain.verb`）完成决策（LLM 或规则脚本）。
+3. 客户端通过 `GET /api/v1/sessions/{session_id}` 读取当前 `Session.actions`，并转成本地 tools / 校验规则 / 提示词素材。
 4. 客户端通过 `POST /api/v1/sessions/{session_id}/events` 上报事件。
 5. access token 过期后，客户端调用 `POST /api/v1/sessions/{session_id}/entities/{entity_id}/tokens/refresh` 刷新。
 
@@ -77,7 +77,21 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 {
   "name": "Demo social world",
   "description": "Demo social world",
-  "max_entities_limit": 1000
+  "max_entities_limit": 1000,
+  "actions": [
+    {
+      "verb": "social.posted",
+      "description": "发布内容到公共板",
+      "details_schema": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
 }
 ```
 
@@ -85,6 +99,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 - `session_id` 由服务端自动生成（UUID），不允许客户端传入
 - `description` 为可选字段（可传 `null`）
+- `actions` 为 Session 级动作注册表，创建时必须完整提交，且不能为空
+- 每个动作至少包含：`verb/details_schema`
+- `description` 可选
+- `verb` 在同一 Session 内必须唯一
+- `target_ref` 不属于动作注册表约束范围，服务端将其视为不透明目标引用
 
 成功响应（201）：
 
@@ -97,6 +116,20 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
     "name": "Demo social world",
     "description": "Demo social world",
     "max_entities_limit": 1000,
+    "actions": [
+      {
+        "verb": "social.posted",
+        "description": "发布内容到公共板",
+        "details_schema": {
+          "type": "object",
+          "required": ["content"],
+          "properties": {
+            "content": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      }
+    ],
     "created_at": "2026-03-03T12:00:00Z",
     "updated_at": "2026-03-03T12:00:00Z"
   }
@@ -133,6 +166,8 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 - Method: `GET`
 - Path: `/api/v1/sessions/{session_id}`
 
+返回当前 Session 详情，包含当前生效的 `actions`。
+
 ### 2.4 编辑 Session
 
 - Method: `PATCH`
@@ -144,11 +179,29 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 {
   "name": "New session name",
   "description": "New description",
-  "max_entities_limit": 1200
+  "max_entities_limit": 1200,
+  "actions": [
+    {
+      "verb": "combat.attacked",
+      "description": "攻击另一个实体",
+      "details_schema": {
+        "type": "object",
+        "required": ["damage"],
+        "properties": {
+          "damage": {"type": "integer", "minimum": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
 }
 ```
 
-说明：`session_id` 由服务端生成且不可修改。
+说明：
+
+- `session_id` 由服务端生成且不可修改
+- `actions` 为可选增量字段；若提交，则整体替换当前 Session 动作注册表
+- 新规则在 PATCH 成功后立即生效，仅影响后续新上报事件；历史事件不回写、不重算
 
 ### 2.5 删除 Session
 
@@ -363,7 +416,7 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 - Method: `POST`
 - Path: `/api/v1/sessions/{session_id}/events`
 
-当前阶段不做强约束，沿用现有事件协议。建议最小请求体包含：
+当前版本对事件采用 Session 级强约束。建议最小请求体包含：
 
 ```json
 {
@@ -388,6 +441,13 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 - 要求 `token.entity_id == body.subject_uuid`，否则返回 `403`
 - 客户端若在模型侧使用别名，必须在上报前还原为真实 `subject_uuid/target_ref`（接口仅接受真实 ID）
 
+服务端强校验：
+
+- `verb` 必须已注册在当前 `Session.actions`
+- `details` 必须通过该动作的 `details_schema` 校验
+- `target_ref` 保留为不透明目标引用，服务端不对其语义走向做强限制
+- 校验失败返回 `422`
+
 ### 4.2 获取 Session 事件流
 
 - Method: `GET`
@@ -397,6 +457,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 - `limit`：默认 `20`，范围 `1~100`
 - `cursor`：可选，格式 `world_time:event_id`
+- `verb_domain`：可选，按动词域过滤，只接受 `domain` 片段（如 `social`），语义为仅返回 `social.*`
+
+请求示例：
+
+- `GET /api/v1/sessions/{session_id}/events?verb_domain=social&limit=20`
 
 鉴权说明：
 
@@ -432,7 +497,9 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 - 必须使用 `domain.verb` 命名空间（如 `social.posted`、`robot.stuck`、`weather.rain_started`）。
 - 推荐正则：`^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$`。
-- 服务端不维护动作白名单，动作语义由客户端定义。
+- 服务端不维护全局动作白名单，但会校验该动作是否存在于当前 `Session.actions`。
+- 若使用 `verb_domain`，其格式必须满足 `^[a-z][a-z0-9_]*$`，过滤在分页前生效；`cursor` 只在该过滤结果集内继续翻页。
+- 若过滤后无命中，返回 `200`，其中 `items=[]`、`next_cursor=null`、`has_more=false`。
 
 ## 5. Entity Context 资源
 
@@ -443,9 +510,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 说明：
 
+- 以下为 `Context v2` 目标口径，当前代码仍为旧版社交视图实现，后续迁移以本节为准。
 - 该接口返回 Entity 在当前 Session 的 Activity 相关数据
 - **不返回 Entity 运行态字段（如 `name/source`）**
-- 返回固定六个 `views`：`self_recent`、`public_feed`、`following_feed`、`attention`、`hot`、`world_snapshot`
+- 返回固定六个 `views`：`self_recent`、`incoming_recent`、`neighbor_recent`、`global_recent`、`hot_targets`、`world_snapshot`
+- 这些 `views` 是领域中立的关系视图，不等同于社交产品里的 feed、timeline、reply tree
 - 返回体中的 `subject_uuid/target_ref` 是协议层真实标识；客户端在喂给模型前应做别名化，避免原始 UUID 暴露到模型输入
 
 鉴权约束：
@@ -469,67 +538,69 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
           {
             "event_id": "event_0998",
             "world_time": 12000,
-            "verb": "social.posted",
+            "verb": "observe.logged",
             "subject_uuid": "8b58f5c8-57a0-47d6-b915-761ec2b9cb81",
             "target_ref": "board:session_demo_001",
             "details": {
-              "content": "我今天开始记录观察日志。"
+              "summary": "我开始记录观察日志。"
             }
           }
         ],
         "next_cursor": null,
         "has_more": false
       },
-      "public_feed": {
+      "incoming_recent": {
         "items": [
           {
             "event_id": "event_1002",
             "world_time": 12003,
-            "verb": "social.posted",
+            "verb": "combat.attacked",
             "subject_uuid": "entity_y",
-            "target_ref": "board:session_demo_001",
+            "target_ref": "entity:8b58f5c8-57a0-47d6-b915-761ec2b9cb81",
             "details": {
-              "content": "今晚开会吗？"
+              "damage": 8
             }
           }
         ],
         "next_cursor": null,
         "has_more": false
       },
-      "following_feed": {
+      "neighbor_recent": {
         "items": [
           {
             "event_id": "event_0999",
             "world_time": 12002,
-            "verb": "social.posted",
+            "verb": "observe.reported",
             "subject_uuid": "entity_following_1",
             "target_ref": "board:session_demo_001",
             "details": {
-              "content": "刚发布了一个新想法"
+              "summary": "北侧出现异常噪声。"
             }
           }
         ],
         "next_cursor": null,
         "has_more": false
       },
-      "attention": {
+      "global_recent": {
         "items": [
           {
             "event_id": "event_1001",
             "world_time": 12001,
-            "verb": "social.followed",
+            "verb": "weather.rain_started",
             "subject_uuid": "entity_x",
-            "target_ref": "entity:8b58f5c8-57a0-47d6-b915-761ec2b9cb81",
-            "details": {}
+            "target_ref": "board:session_demo_001",
+            "details": {
+              "intensity": "light"
+            }
           }
         ],
         "next_cursor": null,
         "has_more": false
       },
-      "hot": {
+      "hot_targets": {
         "items": [
           {
-            "topic_ref": "board:session_demo_001",
+            "target_ref": "entity:8b58f5c8-57a0-47d6-b915-761ec2b9cb81",
             "score": 3.0,
             "sample_event_ids": ["event_1002", "event_0999", "event_0998"]
           }
@@ -540,8 +611,7 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
       "world_snapshot": {
         "online_entities": 128,
         "active_entities": 128,
-        "recent_event_count": 320,
-        "my_following_count": 12
+        "recent_event_count": 320
       }
     }
   }
@@ -550,18 +620,19 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 视图字段约定：
 
-- `self_recent/public_feed/following_feed/attention/hot` 统一使用 `{items,next_cursor,has_more}`
+- `self_recent/incoming_recent/neighbor_recent/global_recent/hot_targets` 统一使用 `{items,next_cursor,has_more}`
 - `world_snapshot` 为快照对象（非事件流，不分页）
 - 事件型 `items` 的单条结构建议包含：`event_id/world_time/verb/subject_uuid/target_ref/details`
-- `hot.items` 为聚合项，建议包含：`topic_ref/score/sample_event_ids`
-- 当前实现中 `hot.score` 口径为：该 `topic_ref` 在本次 recent-only 结果中的出现次数（`float`）
+- `hot_targets.items` 为聚合项，建议包含：`target_ref/score/sample_event_ids`
+- `hot_targets.score` 口径为：该 `target_ref` 在本次 recent-only 结果中的出现次数（`float`）
 - 事件流 `next_cursor` 口径为：`{world_time}:{event_id}`
+- 客户端可基于这些领域中立视图自行投影出 `public_feed`、`reply tree`、`battle log`、`alert stream` 等业务视图
 
 ## 6. 存储口径
 
 ### 6.1 PostgreSQL
 
-- `sessions` 仅存 Session 控制面：`session_id/name/description/max_entities_limit/created_at/updated_at`
+- `sessions` 仅存 Session 控制面与规则锚点：`session_id/name/description/max_entities_limit/actions/created_at/updated_at`
 
 ### 6.2 Redis（Entity 运行态）
 
@@ -592,3 +663,4 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 - `404` 资源不存在
 - `409` 冲突（如 display_name 占用）
 - `500` 未处理异常
+

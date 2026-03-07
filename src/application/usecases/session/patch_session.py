@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 from src.application.usecases.session.get_session import SessionDetailInfo
 from src.core.exceptions import SessionNotFoundException
+from src.domain.session.actions import session_actions_from_payload
 from src.domain.session.repository import SessionRepository
 
 
@@ -19,6 +22,7 @@ class PatchSessionUseCase:
         name: str | None = None,
         description: str | None = None,
         max_entities_limit: int | None = None,
+        actions: list[dict[str, Any]] | None = None,
     ) -> SessionDetailInfo:
         """执行业务流程并返回结果。"""
         session = await self._session_repo.get(session_id=session_id)
@@ -28,12 +32,14 @@ class PatchSessionUseCase:
         merged_name = session.name if name is None else name
         merged_description = session.description if description is None else description
         merged_max_entities_limit = session.max_entities_limit if max_entities_limit is None else max_entities_limit
+        merged_actions = session.actions if actions is None else session_actions_from_payload(actions)
 
         updated_session = await self._session_repo.update(
             session_id=session_id,
             name=merged_name,
             description=merged_description,
             max_entities_limit=merged_max_entities_limit,
+            actions=merged_actions,
         )
         if updated_session is None:
             raise SessionNotFoundException(session_id)
@@ -43,6 +49,7 @@ class PatchSessionUseCase:
             name=updated_session.name,
             description=updated_session.description,
             max_entities_limit=updated_session.max_entities_limit,
+            actions=updated_session.actions,
             created_at=updated_session.created_at,
             updated_at=updated_session.updated_at,
         )

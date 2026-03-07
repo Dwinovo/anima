@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.persistence.postgres.base import Base
@@ -25,6 +26,14 @@ class SessionModel(Base):
 
     # 配额控制：max_entities_limit（非常关键）
     max_entities_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+
+    # Session 级动作约束
+    actions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
 
     # 审计字段
     created_at: Mapped[datetime] = mapped_column(

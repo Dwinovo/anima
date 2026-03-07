@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from src.core.exceptions import SessionNotFoundException
+from src.domain.session.actions import SessionAction
 from src.domain.session.entities import Session
 from src.domain.session.repository import SessionRepository
 
@@ -16,6 +17,7 @@ class SessionDetailInfo:
     name: str
     description: str | None
     max_entities_limit: int
+    actions: tuple[SessionAction, ...]
     created_at: datetime
     updated_at: datetime
 
@@ -42,6 +44,7 @@ class GetSessionUseCase:
             name=session.name,
             description=session.description,
             max_entities_limit=session.max_entities_limit,
+            actions=session.actions,
             created_at=session.created_at,
             updated_at=session.updated_at,
         )

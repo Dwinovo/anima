@@ -34,13 +34,14 @@ async def list_session_events(
     query: EventListQuery = Depends(),
     usecase: ListSessionEventsUseCase = Depends(get_list_session_events_usecase),
 ) -> ApiResponse[EventListData]:
-    """按时间倒序列出会话事件流。"""
+    """按时间倒序列出会话事件流，支持可选动词域过滤。"""
     before_world_time, before_event_id = query.parse_cursor()
     result = await usecase.execute(
         session_id=session_id,
         limit=query.limit,
         before_world_time=before_world_time,
         before_event_id=before_event_id,
+        verb_domain=query.verb_domain,
     )
     items = [
         EventListItem(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,8 +9,76 @@ import pytest
 from src.application.dto.event import EventReportResult
 from src.application.usecases.event.list_session_events import ListSessionEventsUseCase
 from src.application.usecases.event.report_event import ReportEventUseCase
-from src.core.exceptions import EntityNotFoundException, SessionNotFoundException
+from src.core.exceptions import AnimaException, EntityNotFoundException, SessionNotFoundException
+from src.domain.session.actions import SessionAction, session_actions_from_payload
 from src.domain.session.entities import Session
+
+
+def build_post_actions() -> list[dict[str, object]]:
+    """Builds the action config for posting."""
+    return [
+        {
+            "verb": "social.posted",
+            "description": "post to session board",
+            "details_schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                    }
+                },
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
+def build_follow_actions() -> list[dict[str, object]]:
+    """Builds the action config for following."""
+    return [
+        {
+            "verb": "social.followed",
+            "description": "follow another entity",
+            "details_schema": {
+                "type": "object",
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
+def build_reply_actions() -> list[dict[str, object]]:
+    """Builds the action config for replying."""
+    return [
+        {
+            "verb": "social.replied",
+            "description": "reply to post or reply",
+            "details_schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                    }
+                },
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
+def normalize_actions(
+    actions: list[dict[str, object]] | tuple[SessionAction, ...] | None,
+) -> tuple[SessionAction, ...]:
+    """统一将测试输入动作转换为领域对象。"""
+    if actions is None:
+        return ()
+    if actions and isinstance(actions[0], SessionAction):
+        return actions
+    return session_actions_from_payload(actions)
 
 
 class InMemorySessionRepository:
@@ -32,6 +101,7 @@ class InMemorySessionRepository:
         name: str | None = None,
         max_entities_limit: int,
         description: str | None = None,
+        actions: list[dict[str, object]] | None = None,
     ) -> Session:
         """创建 Session 并返回实体。"""
         now = datetime.now(timezone.utc)
@@ -40,6 +110,7 @@ class InMemorySessionRepository:
             name=name or session_id,
             description=description,
             max_entities_limit=max_entities_limit,
+            actions=normalize_actions(actions),
             created_at=now,
             updated_at=now,
         )
@@ -82,9 +153,15 @@ class InMemoryEventPayloadRepository:
 class InMemoryProfileRepository:
     """Entity Profile 仓储测试替身。"""
 
-    def __init__(self, existing_entity_ids: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        existing_entity_ids: set[str] | None = None,
+        profiles_by_entity_id: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
         """初始化对象并注入所需依赖。"""
         self._existing_entity_ids = existing_entity_ids or set()
+        self._profiles_by_entity_id = profiles_by_entity_id or {}
+        self._existing_entity_ids.update(self._profiles_by_entity_id.keys())
 
     async def save(
         self,
@@ -100,6 +177,9 @@ class InMemoryProfileRepository:
     async def get(self, *, session_id: str, entity_id: str) -> str | None:
         """读取 Entity 画像，存在时返回占位 JSON。"""
         _ = session_id
+        payload = self._profiles_by_entity_id.get(entity_id)
+        if payload is not None:
+            return json.dumps(payload)
         if entity_id in self._existing_entity_ids:
             return '{"name":"demo"}'
         return None
@@ -163,12 +243,14 @@ class InMemoryGraphEventRepository:
         limit: int,
         before_world_time: int | None = None,
         before_event_id: str | None = None,
+        verb_domain: str | None = None,
     ) -> list[str]:
         """按时间倒序返回近期事件 ID。"""
         _ = session_id
         _ = limit
         _ = before_world_time
         _ = before_event_id
+        _ = verb_domain
         return []
 
 
@@ -184,6 +266,7 @@ class InMemoryGraphSearchRepository:
         """初始化对象并注入所需依赖。"""
         self._calls = calls
         self._recent_ids = recent_ids or []
+        self.last_query: dict[str, Any] | None = None
 
     async def upsert_event(
         self,
@@ -205,10 +288,18 @@ class InMemoryGraphSearchRepository:
         limit: int,
         before_world_time: int | None = None,
         before_event_id: str | None = None,
+        verb_domain: str | None = None,
     ) -> list[str]:
         """返回预置的最近事件结果。"""
         _ = session_id
         _ = before_world_time
+        self.last_query = {
+            "session_id": session_id,
+            "limit": limit,
+            "before_world_time": before_world_time,
+            "before_event_id": before_event_id,
+            "verb_domain": verb_domain,
+        }
         if before_event_id is None:
             recent_ids = list(self._recent_ids)
         else:
@@ -230,6 +321,7 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
         session_id="session_demo",
         description=None,
         max_entities_limit=100,
+        actions=build_follow_actions(),
     )
     payload_repo = InMemoryEventPayloadRepository()
     profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
@@ -241,8 +333,8 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
         world_time=12005,
         subject_uuid="entity_a",
         target_ref="entity_b",
-        verb="POSTED",
-        details={"content": "hello"},
+        verb="social.followed",
+        details={},
         schema_version=1,
     )
 
@@ -250,19 +342,19 @@ async def test_report_event_usecase_dual_writes_in_order() -> None:
     assert result.session_id == "session_demo"
     assert result.event_id.startswith("event_")
     assert result.world_time == 12005
-    assert result.verb == "POSTED"
+    assert result.verb == "social.followed"
     assert result.accepted is True
     assert payload_repo._calls == ["mongo.put", "neo4j.upsert"]
     payload_doc = await payload_repo.get(event_id=result.event_id)
     assert payload_doc is not None
     assert payload_doc["session_id"] == "session_demo"
     assert payload_doc["world_time"] == 12005
-    assert payload_doc["verb"] == "POSTED"
+    assert payload_doc["verb"] == "social.followed"
     assert payload_doc["subject_uuid"] == "entity_a"
     assert payload_doc["target_ref"] == "entity_b"
-    assert payload_doc["details"] == {"content": "hello"}
+    assert payload_doc["details"] == {}
     assert payload_doc["schema_version"] == 1
-    assert graph_repo._events[result.event_id]["verb"] == "POSTED"
+    assert graph_repo._events[result.event_id]["verb"] == "social.followed"
 
 
 @pytest.mark.asyncio
@@ -279,7 +371,7 @@ async def test_report_event_usecase_raises_when_session_missing() -> None:
             world_time=1,
             subject_uuid="entity_a",
             target_ref="entity_b",
-            verb="POSTED",
+            verb="social.followed",
             details={},
             schema_version=1,
         )
@@ -293,6 +385,7 @@ async def test_report_event_usecase_raises_when_subject_entity_missing() -> None
         session_id="session_demo",
         description=None,
         max_entities_limit=100,
+        actions=build_follow_actions(),
     )
     payload_repo = InMemoryEventPayloadRepository()
     profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_other"})
@@ -305,10 +398,128 @@ async def test_report_event_usecase_raises_when_subject_entity_missing() -> None
             world_time=1,
             subject_uuid="entity_a",
             target_ref="entity_b",
-            verb="POSTED",
+            verb="social.followed",
             details={},
             schema_version=1,
         )
+
+
+@pytest.mark.asyncio
+async def test_report_event_usecase_accepts_registered_verb_with_event_target_ref() -> None:
+    """Registered verbs accept event target refs when details are valid."""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_entities_limit=100,
+        actions=build_reply_actions(),
+    )
+    payload_repo = InMemoryEventPayloadRepository()
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
+    graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
+    usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
+
+    result = await usecase.execute(
+        session_id="session_demo",
+        world_time=12005,
+        subject_uuid="entity_a",
+        target_ref="event_003",
+        verb="social.replied",
+        details={"content": "hello"},
+        schema_version=1,
+    )
+
+    assert result.accepted is True
+    assert payload_repo._calls == ["mongo.put", "neo4j.upsert"]
+
+
+@pytest.mark.asyncio
+async def test_report_event_usecase_rejects_unregistered_verb() -> None:
+    """验证 event 上报会拒绝未注册到 Session.actions 的 verb。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_entities_limit=100,
+        actions=build_post_actions(),
+    )
+    payload_repo = InMemoryEventPayloadRepository()
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
+    graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
+    usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
+
+    with pytest.raises(AnimaException) as exc_info:
+        await usecase.execute(
+            session_id="session_demo",
+            world_time=12005,
+            subject_uuid="entity_a",
+            target_ref="board:session_demo",
+            verb="combat.attacked",
+            details={"damage": 10},
+            schema_version=1,
+        )
+
+    assert exc_info.value.status_code == 422
+    assert payload_repo._calls == []
+
+
+@pytest.mark.asyncio
+async def test_report_event_usecase_accepts_registered_verb_with_object_target_ref() -> None:
+    """Registered verbs accept object target refs when details are valid."""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_entities_limit=100,
+        actions=build_follow_actions(),
+    )
+    payload_repo = InMemoryEventPayloadRepository()
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
+    graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
+    usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
+
+    result = await usecase.execute(
+        session_id="session_demo",
+        world_time=12005,
+        subject_uuid="entity_a",
+        target_ref="board:session_demo",
+        verb="social.followed",
+        details={},
+        schema_version=1,
+    )
+
+    assert result.accepted is True
+    assert payload_repo._calls == ["mongo.put", "neo4j.upsert"]
+
+
+@pytest.mark.asyncio
+async def test_report_event_usecase_rejects_details_schema_mismatch() -> None:
+    """验证 event 上报会拒绝不符合 details_schema 的载荷。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_entities_limit=100,
+        actions=build_post_actions(),
+    )
+    payload_repo = InMemoryEventPayloadRepository()
+    profile_repo = InMemoryProfileRepository(existing_entity_ids={"entity_a"})
+    graph_repo = InMemoryGraphEventRepository(payload_repo._calls)
+    usecase = ReportEventUseCase(session_repo, profile_repo, payload_repo, graph_repo)
+
+    with pytest.raises(AnimaException) as exc_info:
+        await usecase.execute(
+            session_id="session_demo",
+            world_time=12005,
+            subject_uuid="entity_a",
+            target_ref="board:session_demo",
+            verb="social.posted",
+            details={},
+            schema_version=1,
+        )
+
+    assert exc_info.value.status_code == 422
+    assert payload_repo._calls == []
 
 
 @pytest.mark.asyncio
@@ -319,6 +530,7 @@ async def test_list_session_events_usecase_returns_cursor_page() -> None:
         session_id="session_demo",
         description=None,
         max_entities_limit=100,
+        actions=build_post_actions(),
     )
     payload_repo = InMemoryEventPayloadRepository()
     await payload_repo.put(
@@ -384,6 +596,7 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
         session_id="session_demo",
         description=None,
         max_entities_limit=100,
+        actions=build_post_actions(),
     )
     payload_repo = InMemoryEventPayloadRepository()
     await payload_repo.put(
@@ -441,6 +654,35 @@ async def test_list_session_events_usecase_uses_cursor_for_next_page() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_session_events_usecase_forwards_verb_domain_to_graph_repo() -> None:
+    """验证会话事件列表查询会将动词域过滤条件传给图仓储。"""
+    session_repo = InMemorySessionRepository()
+    await session_repo.create(
+        session_id="session_demo",
+        description=None,
+        max_entities_limit=100,
+        actions=build_post_actions(),
+    )
+    payload_repo = InMemoryEventPayloadRepository()
+    graph_repo = InMemoryGraphSearchRepository(
+        calls=payload_repo._calls,
+        recent_ids=[],
+    )
+    usecase = ListSessionEventsUseCase(session_repo, payload_repo, graph_repo)
+
+    await usecase.execute(
+        session_id="session_demo",
+        limit=20,
+        before_world_time=None,
+        before_event_id=None,
+        verb_domain="social",
+    )
+
+    assert graph_repo.last_query is not None
+    assert graph_repo.last_query["verb_domain"] == "social"
+
+
+@pytest.mark.asyncio
 async def test_list_session_events_usecase_raises_when_session_missing() -> None:
     """验证会话不存在时会抛出异常。"""
     payload_repo = InMemoryEventPayloadRepository()
@@ -454,3 +696,4 @@ async def test_list_session_events_usecase_raises_when_session_missing() -> None
             before_world_time=None,
             before_event_id=None,
         )
+

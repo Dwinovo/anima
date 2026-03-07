@@ -59,8 +59,10 @@ class Neo4jGraphEventRepository(GraphEventRepository):
         limit: int,
         before_world_time: int | None = None,
         before_event_id: str | None = None,
+        verb_domain: str | None = None,
     ) -> list[str]:
         """按时间倒序获取近期事件候选。"""
+        verb_prefix = f"{verb_domain}." if verb_domain is not None else None
         async with self._driver.session() as session:
             result = await session.run(
                 RECENT_EVENT_IDS,
@@ -69,6 +71,7 @@ class Neo4jGraphEventRepository(GraphEventRepository):
                     "limit": limit,
                     "before_world_time": before_world_time,
                     "before_event_id": before_event_id,
+                    "verb_prefix": verb_prefix,
                 },
             )
             rows = await result.data()

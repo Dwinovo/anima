@@ -25,9 +25,12 @@ MERGE (e)-[:TARGETED]->(o)
 RECENT_EVENT_IDS = """
 MATCH (e:Event {session_id: $session_id})
 WHERE
-  $before_world_time IS NULL
-  OR e.world_time < $before_world_time
-  OR (e.world_time = $before_world_time AND e.event_id < $before_event_id)
+  ($verb_prefix IS NULL OR e.verb STARTS WITH $verb_prefix)
+  AND (
+    $before_world_time IS NULL
+    OR e.world_time < $before_world_time
+    OR (e.world_time = $before_world_time AND e.event_id < $before_event_id)
+  )
 RETURN e.event_id AS event_id
 ORDER BY e.world_time DESC, e.event_id DESC
 LIMIT $limit

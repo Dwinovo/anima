@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.session.actions import SessionAction, session_actions_from_payload, session_actions_to_payload
 from src.domain.session.entities import Session
 from src.domain.session.repository import SessionRepository
 from src.infrastructure.persistence.postgres.models import SessionModel
@@ -24,6 +25,7 @@ class PostgresSessionRepository(SessionRepository):
             name=model.name,
             description=model.description,
             max_entities_limit=model.max_entities_limit,
+            actions=session_actions_from_payload(model.actions),
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -48,6 +50,7 @@ class PostgresSessionRepository(SessionRepository):
         session_id: str,
         name: str,
         max_entities_limit: int,
+        actions: tuple[SessionAction, ...],
         description: str | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
@@ -56,6 +59,7 @@ class PostgresSessionRepository(SessionRepository):
             "name": name,
             "max_entities_limit": max_entities_limit,
             "description": description,
+            "actions": session_actions_to_payload(actions),
         }
         model = SessionModel(**payload)
         self._session.add(model)
@@ -84,6 +88,7 @@ class PostgresSessionRepository(SessionRepository):
         name: str | None = None,
         description: str | None = None,
         max_entities_limit: int | None = None,
+        actions: tuple[SessionAction, ...] | None = None,
     ) -> Session | None:
         """更新指定会话并返回最新实体。"""
         stmt = select(SessionModel).where(SessionModel.session_id == session_id)
@@ -97,6 +102,8 @@ class PostgresSessionRepository(SessionRepository):
             model.description = description
         if max_entities_limit is not None:
             model.max_entities_limit = max_entities_limit
+        if actions is not None:
+            model.actions = session_actions_to_payload(actions)
         await self._session.commit()
         await self._session.refresh(model)
         return self._to_domain(model)

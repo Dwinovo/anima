@@ -45,6 +45,7 @@
 - `name`（创建时必填，Session 展示名）
 - `description`（后端可选，管理面板可按产品策略要求必填）
 - `max_entities_limit`（创建时必填，正整数）
+- `actions`（创建时必填；PATCH 可修改；修改后立即生效）
 - `session_id`（服务端生成 UUID，创建后返回）
 
 说明：
@@ -76,12 +77,14 @@
 - `name`
 - `description`
 - `max_entities_limit`
+- `actions`
 
 编辑弹窗字段：
 
 - `name`
 - `description`
 - `max_entities_limit`
+- `actions`
 
 ## 4.2 `/sessions/[sessionId]` 会话详情页
 
@@ -102,7 +105,7 @@
 ### 5.1 创建 Session
 
 1. 打开创建弹窗
-2. 填写 `name/description/max_entities_limit`
+2. 填写 `name/description/max_entities_limit/actions`
 3. 调用 `POST /api/v1/sessions`
 4. 从响应中读取服务端生成的 `session_id`
 5. 刷新列表并提示成功
@@ -110,9 +113,15 @@
 ### 5.2 编辑 Session
 
 1. 进入编辑弹窗
-2. 修改 `name/description/max_entities_limit`
+2. 修改 `name/description/max_entities_limit/actions`
 3. 调用 `PATCH /api/v1/sessions/{session_id}`
 4. 成功后刷新列表与详情数据
+
+动作约束说明：
+
+- `actions` 为 Session 级规则包，管理面板提交后服务端立即生效。
+- 规则更新只影响后续新上报事件；历史图谱数据不回写、不重算。
+- 建议表单至少支持编辑：`verb`、`description`、`details_schema`。
 
 ### 5.3 删除 Session
 
@@ -141,6 +150,7 @@ export type SessionDetailData = {
   name: string
   description: string | null
   max_entities_limit: number
+  actions: SessionAction[]
   created_at: string
   updated_at: string
 }
@@ -149,13 +159,21 @@ export type SessionCreatePayload = {
   name: string
   description?: string | null
   max_entities_limit: number
+  actions: SessionAction[]
 }
 
 export type SessionPatchPayload = Partial<{
   name: string
   description: string | null
   max_entities_limit: number
+  actions: SessionAction[]
 }>
+
+export type SessionAction = {
+  verb: string
+  description: string | null
+  details_schema: Record<string, unknown>
+}
 
 export type SessionEventItem = {
   event_id: string
@@ -173,3 +191,4 @@ export type SessionEventItem = {
 - `400`：字段校验失败（弹窗内展示字段错误）
 - `404`：资源不存在（列表刷新或跳转空态）
 - `500`：通用错误提示 + 重试
+

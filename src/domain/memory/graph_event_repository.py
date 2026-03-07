@@ -25,5 +25,6 @@ class GraphEventRepository(Protocol):
         limit: int,
         before_world_time: int | None = None,
         before_event_id: str | None = None,
+        verb_domain: str | None = None,
     ) -> list[str]:
-        """按时间倒序列出近期事件候选（recent-only）。"""
+        """按时间倒序列出近期事件候选（recent-only），可选按动词域过滤。"""

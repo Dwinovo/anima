@@ -33,7 +33,7 @@ class EventReportRequest(BaseModel):
         ...,
         min_length=1,
         max_length=128,
-        description="目标引用（如 entity_x 或 board:session_x）。",
+        description="目标引用（如 entity_x、event_x 或 board:session_x），服务端按不透明引用处理。",
         examples=["board:session_demo"],
     )
     details: dict[str, Any] = Field(
@@ -71,6 +71,7 @@ class EventReportRequest(BaseModel):
 
 
 CURSOR_PATTERN = re.compile(r"^\d+:[A-Za-z0-9_-]+$")
+VERB_DOMAIN_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 VERB_NAMESPACE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 
@@ -89,6 +90,11 @@ class EventListQuery(BaseModel):
         description="分页游标，格式：world_time:event_id。",
         examples=["12004:event_abc123"],
     )
+    verb_domain: str | None = Field(
+        default=None,
+        description="可选动词域过滤，仅接受 domain 片段，如 social。",
+        examples=["social"],
+    )
 
     @field_validator("cursor")
     @classmethod
@@ -98,6 +104,16 @@ class EventListQuery(BaseModel):
             return None
         if CURSOR_PATTERN.match(value) is None:
             raise ValueError("cursor 格式非法，必须为 world_time:event_id。")
+        return value
+
+    @field_validator("verb_domain")
+    @classmethod
+    def _validate_verb_domain(cls, value: str | None) -> str | None:
+        """校验动词域过滤参数是否合法。"""
+        if value is None:
+            return None
+        if VERB_DOMAIN_PATTERN.match(value) is None:
+            raise ValueError("verb_domain 格式非法，必须为 domain 片段。")
         return value
 
     def parse_cursor(self) -> tuple[int | None, str | None]:
@@ -113,3 +129,4 @@ class EventListQuery(BaseModel):
 
 
 __all__ = ["EventListQuery", "EventReportRequest"]
+

@@ -28,6 +28,7 @@ class ListSessionEventsUseCase:
         limit: int,
         before_world_time: int | None = None,
         before_event_id: str | None = None,
+        verb_domain: str | None = None,
     ) -> EventListResult:
         """执行会话事件列表查询并返回分页结果。"""
         session = await self._session_repo.get(session_id=session_id)
@@ -40,6 +41,7 @@ class ListSessionEventsUseCase:
             limit=fetch_limit,
             before_world_time=before_world_time,
             before_event_id=before_event_id,
+            verb_domain=verb_domain,
         )
 
         has_more = len(recent_event_ids) > limit

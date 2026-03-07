@@ -177,19 +177,19 @@ async def get_entity_context(
     _: TokenClaims = Depends(require_entity_access_claims),
     usecase: GetEntityContextUseCase = Depends(get_entity_context_usecase),
 ) -> ApiResponse[EntityContextData]:
-    """获取 Entity 在社交平台中的上下文事件。"""
+    """获取 Entity 在当前 Session 的通用关系上下文。"""
     result = await usecase.execute(session_id=session_id, entity_id=entity_id)
     self_recent_items = [_to_context_event_item(item) for item in result.views.self_recent.items]
-    public_feed_items = [_to_context_event_item(item) for item in result.views.public_feed.items]
-    following_feed_items = [_to_context_event_item(item) for item in result.views.following_feed.items]
-    attention_items = [_to_context_event_item(item) for item in result.views.attention.items]
+    incoming_recent_items = [_to_context_event_item(item) for item in result.views.incoming_recent.items]
+    neighbor_recent_items = [_to_context_event_item(item) for item in result.views.neighbor_recent.items]
+    global_recent_items = [_to_context_event_item(item) for item in result.views.global_recent.items]
     hot_items = [
         EntityContextHotItem(
-            topic_ref=item.topic_ref,
+            target_ref=item.target_ref,
             score=item.score,
             sample_event_ids=item.sample_event_ids,
         )
-        for item in result.views.hot.items
+        for item in result.views.hot_targets.items
     ]
     return ApiResponse(
         code=0,
@@ -204,31 +204,30 @@ async def get_entity_context(
                     next_cursor=result.views.self_recent.next_cursor,
                     has_more=result.views.self_recent.has_more,
                 ),
-                public_feed=EntityContextEventListView(
-                    items=public_feed_items,
-                    next_cursor=result.views.public_feed.next_cursor,
-                    has_more=result.views.public_feed.has_more,
+                incoming_recent=EntityContextEventListView(
+                    items=incoming_recent_items,
+                    next_cursor=result.views.incoming_recent.next_cursor,
+                    has_more=result.views.incoming_recent.has_more,
                 ),
-                following_feed=EntityContextEventListView(
-                    items=following_feed_items,
-                    next_cursor=result.views.following_feed.next_cursor,
-                    has_more=result.views.following_feed.has_more,
+                neighbor_recent=EntityContextEventListView(
+                    items=neighbor_recent_items,
+                    next_cursor=result.views.neighbor_recent.next_cursor,
+                    has_more=result.views.neighbor_recent.has_more,
                 ),
-                attention=EntityContextEventListView(
-                    items=attention_items,
-                    next_cursor=result.views.attention.next_cursor,
-                    has_more=result.views.attention.has_more,
+                global_recent=EntityContextEventListView(
+                    items=global_recent_items,
+                    next_cursor=result.views.global_recent.next_cursor,
+                    has_more=result.views.global_recent.has_more,
                 ),
-                hot=EntityContextHotListView(
+                hot_targets=EntityContextHotListView(
                     items=hot_items,
-                    next_cursor=result.views.hot.next_cursor,
-                    has_more=result.views.hot.has_more,
+                    next_cursor=result.views.hot_targets.next_cursor,
+                    has_more=result.views.hot_targets.has_more,
                 ),
                 world_snapshot=EntityContextWorldSnapshot(
                     online_entities=result.views.world_snapshot.online_entities,
                     active_entities=result.views.world_snapshot.active_entities,
                     recent_event_count=result.views.world_snapshot.recent_event_count,
-                    my_following_count=result.views.world_snapshot.my_following_count,
                 ),
             ),
         ),

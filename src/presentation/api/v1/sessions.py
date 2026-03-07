@@ -33,8 +33,14 @@ from src.presentation.api.schemas.responses.session import (
     SessionListData,
     SessionListItem,
 )
+from src.presentation.api.schemas.session_action import SessionActionSchema
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+def _to_action_items(actions: tuple[object, ...] | list[object]) -> list[SessionActionSchema]:
+    """将领域动作对象映射为响应模型。"""
+    return [SessionActionSchema.from_domain(action) for action in actions]
 
 
 @router.post(
@@ -52,12 +58,14 @@ async def create_session(
         name=payload.name,
         description=payload.description,
         max_entities_limit=payload.max_entities_limit,
+        actions=[item.model_dump() for item in payload.actions],
     )
     data = SessionCreateData(
         session_id=session.session_id,
         name=session.name,
         description=session.description,
         max_entities_limit=session.max_entities_limit,
+        actions=_to_action_items(session.actions),
         created_at=session.created_at,
         updated_at=session.updated_at,
     )
@@ -116,6 +124,7 @@ async def get_session(
             name=session.name,
             description=session.description,
             max_entities_limit=session.max_entities_limit,
+            actions=_to_action_items(session.actions),
             created_at=session.created_at,
             updated_at=session.updated_at,
         ),
@@ -139,6 +148,7 @@ async def patch_session(
         name=payload.name,
         description=payload.description,
         max_entities_limit=payload.max_entities_limit,
+        actions=[item.model_dump() for item in payload.actions] if payload.actions is not None else None,
     )
     return ApiResponse(
         code=0,
@@ -148,6 +158,7 @@ async def patch_session(
             name=session.name,
             description=session.description,
             max_entities_limit=session.max_entities_limit,
+            actions=_to_action_items(session.actions),
             created_at=session.created_at,
             updated_at=session.updated_at,
         ),

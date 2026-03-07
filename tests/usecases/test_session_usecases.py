@@ -11,7 +11,61 @@ from src.application.usecases.session.get_session import GetSessionUseCase
 from src.application.usecases.session.list_sessions import ListSessionsUseCase
 from src.application.usecases.session.patch_session import PatchSessionUseCase
 from src.core.exceptions import SessionNotFoundException
+from src.domain.session.actions import SessionAction, session_actions_from_payload
 from src.domain.session.entities import Session
+
+
+def build_default_actions() -> list[dict[str, object]]:
+    """构造最小合法的 Session actions 配置。"""
+    return [
+        {
+            "verb": "social.posted",
+            "description": "post to board",
+            "details_schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                    }
+                },
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
+def build_updated_actions() -> list[dict[str, object]]:
+    """构造 PATCH 后的新动作配置。"""
+    return [
+        {
+            "verb": "combat.attacked",
+            "description": "attack another entity",
+            "details_schema": {
+                "type": "object",
+                "required": ["damage"],
+                "properties": {
+                    "damage": {
+                        "type": "integer",
+                        "minimum": 1,
+                    }
+                },
+                "additionalProperties": False,
+            },
+        }
+    ]
+
+
+def normalize_actions(
+    actions: list[dict[str, object]] | tuple[SessionAction, ...] | None,
+) -> tuple[SessionAction, ...]:
+    """统一将测试输入动作转换为领域对象。"""
+    if actions is None:
+        return ()
+    if actions and isinstance(actions[0], SessionAction):
+        return actions
+    return session_actions_from_payload(actions)
 
 
 class InMemorySessionRepository:
@@ -34,6 +88,7 @@ class InMemorySessionRepository:
         name: str,
         max_entities_limit: int,
         description: str | None = None,
+        actions: list[dict[str, object]] | None = None,
     ) -> Session:
         """创建资源并返回创建结果。"""
         now = datetime.now(timezone.utc)
@@ -42,6 +97,7 @@ class InMemorySessionRepository:
             name=name,
             description=description,
             max_entities_limit=max_entities_limit,
+            actions=normalize_actions(actions),
             created_at=now,
             updated_at=now,
         )
@@ -67,6 +123,7 @@ class InMemorySessionRepository:
         name: str | None = None,
         description: str | None = None,
         max_entities_limit: int | None = None,
+        actions: list[dict[str, object]] | None = None,
     ) -> Session | None:
         """更新指定 Session。"""
         existing = self._sessions.get(session_id)
@@ -78,6 +135,8 @@ class InMemorySessionRepository:
             existing.description = description
         if max_entities_limit is not None:
             existing.max_entities_limit = max_entities_limit
+        if actions is not None:
+            existing.actions = normalize_actions(actions)
         existing.updated_at = datetime.now(timezone.utc)
         return existing
 
@@ -92,12 +151,15 @@ async def test_create_session_usecase_generates_server_side_uuid() -> None:
         name="Alpha Session",
         description="social world",
         max_entities_limit=100,
+        actions=build_default_actions(),
     )
 
     UUID(created.session_id)
     assert created.name == "Alpha Session"
     assert created.description == "social world"
     assert created.max_entities_limit == 100
+    assert len(created.actions) == 1
+    assert created.actions[0].verb == "social.posted"
 
 
 @pytest.mark.asyncio
@@ -109,6 +171,7 @@ async def test_delete_session_usecase_deletes_existing_session() -> None:
         name="Deadbeef Session",
         description=None,
         max_entities_limit=10,
+        actions=build_default_actions(),
     )
     usecase = DeleteSessionUseCase(repo)
 
@@ -136,12 +199,14 @@ async def test_list_sessions_usecase_returns_basic_infos_from_postgres() -> None
         name="Alpha Session",
         description="alpha desc",
         max_entities_limit=100,
+        actions=build_default_actions(),
     )
     await session_repo.create(
         session_id="session_beta",
         name="Beta Session",
         description=None,
         max_entities_limit=50,
+        actions=build_default_actions(),
     )
     usecase = ListSessionsUseCase(session_repo)
 
@@ -167,6 +232,7 @@ async def test_get_session_usecase_returns_existing_session() -> None:
         name="Alpha Session",
         description=None,
         max_entities_limit=100,
+        actions=build_default_actions(),
     )
     usecase = GetSessionUseCase(session_repo)
 
@@ -175,6 +241,8 @@ async def test_get_session_usecase_returns_existing_session() -> None:
     assert result.session_id == "session_alpha"
     assert result.name == "Alpha Session"
     assert result.max_entities_limit == 100
+    assert len(result.actions) == 1
+    assert result.actions[0].verb == "social.posted"
     assert result.created_at is not None
     assert result.updated_at is not None
 
@@ -188,6 +256,7 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
         name="Alpha Session",
         description=None,
         max_entities_limit=100,
+        actions=build_default_actions(),
     )
     usecase = PatchSessionUseCase(session_repo)
 
@@ -196,12 +265,15 @@ async def test_patch_session_usecase_updates_partial_fields() -> None:
         name="Alpha Session V2",
         description="new desc",
         max_entities_limit=120,
+        actions=build_updated_actions(),
     )
 
     assert result.session_id == "session_alpha"
     assert result.name == "Alpha Session V2"
     assert result.description == "new desc"
     assert result.max_entities_limit == 120
+    assert len(result.actions) == 1
+    assert result.actions[0].verb == "combat.attacked"
 
 
 @pytest.mark.asyncio

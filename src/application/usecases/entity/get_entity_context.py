@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 
 from src.application.dto.entity import (
     EntityContextEventListView,
-    EntityContextHotListView,
-    EntityContextHotTopic,
+    EntityContextHotTarget,
+    EntityContextHotTargetListView,
     EntityContextResult,
     EntityContextViews,
     EntityContextWorldSnapshot,
@@ -85,39 +85,40 @@ class GetEntityContextUseCase:
             ordered_items.append(self._to_search_item(event_id=event_id, payload=payload))
 
         current_world_time = ordered_items[0].world_time if ordered_items else 0
-        followed_entity_ids = self._collect_followed_entity_ids(
-            entity_id=entity_id,
-            items=ordered_items,
-        )
         self_event_ids = {
             item.event_id
             for item in ordered_items
             if item.subject_uuid == entity_id
         }
+        incoming_event_ids = {
+            item.event_id
+            for item in ordered_items
+            if self._is_incoming_event(
+                item=item,
+                entity_id=entity_id,
+                self_event_ids=self_event_ids,
+            )
+        }
+        neighbor_entity_ids = self._collect_neighbor_entity_ids(
+            entity_id=entity_id,
+            items=ordered_items,
+        )
 
         self_recent_events: list[EventSearchItem] = []
-        public_feed_events: list[EventSearchItem] = []
-        following_feed_events: list[EventSearchItem] = []
-        attention_events: list[EventSearchItem] = []
+        incoming_recent_events: list[EventSearchItem] = []
+        neighbor_recent_events: list[EventSearchItem] = []
         for item in ordered_items:
             if item.subject_uuid == entity_id:
                 self_recent_events.append(item)
                 continue
-            if self._is_status_event(
-                item=item,
-                entity_id=entity_id,
-                self_event_ids=self_event_ids,
-            ):
-                attention_events.append(item)
+            if item.event_id in incoming_event_ids:
+                incoming_recent_events.append(item)
                 continue
-            if item.subject_uuid in followed_entity_ids:
-                following_feed_events.append(item)
-                continue
-            if self._is_public_media_event(item):
-                public_feed_events.append(item)
+            if item.subject_uuid in neighbor_entity_ids:
+                neighbor_recent_events.append(item)
 
         active_count = await self._presence_repo.count_active(session_id=session_id)
-        hot_topics = self._build_hot_topics(items=ordered_items)
+        hot_targets = self._build_hot_targets(items=ordered_items)
 
         return EntityContextResult(
             session_id=session_id,
@@ -125,25 +126,29 @@ class GetEntityContextUseCase:
             current_world_time=current_world_time,
             views=EntityContextViews(
                 self_recent=self._build_event_view(items=self_recent_events, limit=limit),
-                public_feed=self._build_event_view(items=public_feed_events, limit=limit),
-                following_feed=self._build_event_view(items=following_feed_events, limit=limit),
-                attention=self._build_event_view(items=attention_events, limit=limit),
-                hot=self._build_hot_view(items=hot_topics, limit=limit),
+                incoming_recent=self._build_event_view(items=incoming_recent_events, limit=limit),
+                neighbor_recent=self._build_event_view(items=neighbor_recent_events, limit=limit),
+                global_recent=self._build_event_view(items=ordered_items, limit=limit),
+                hot_targets=self._build_hot_view(items=hot_targets, limit=limit),
                 world_snapshot=EntityContextWorldSnapshot(
                     online_entities=active_count,
                     active_entities=active_count,
                     recent_event_count=len(ordered_items),
-                    my_following_count=len(followed_entity_ids),
                 ),
             ),
         )
 
     @staticmethod
-    def _is_public_media_event(item: EventSearchItem) -> bool:
-        """判断事件是否属于公共媒体流事件。"""
-        if item.target_ref.startswith("board:"):
+    def _is_incoming_event(
+        *,
+        item: EventSearchItem,
+        entity_id: str,
+        self_event_ids: set[str],
+    ) -> bool:
+        """判断事件是否直接指向当前实体或其最近事件。"""
+        if item.target_ref == entity_id or item.target_ref == f"entity:{entity_id}":
             return True
-        return item.verb in {"social.posted", "social.replied", "social.quoted"}
+        return item.target_ref in self_event_ids
 
     @staticmethod
     def _build_event_view(
@@ -164,8 +169,8 @@ class GetEntityContextUseCase:
         )
 
     @staticmethod
-    def _build_hot_topics(*, items: list[EventSearchItem]) -> list[EntityContextHotTopic]:
-        """按 target_ref 聚合热点并按热度排序。"""
+    def _build_hot_targets(*, items: list[EventSearchItem]) -> list[EntityContextHotTarget]:
+        """按 target_ref 聚合热点目标并按热度排序。"""
         topic_map: dict[str, _HotTopicAccumulator] = {}
         for item in items:
             topic_ref = item.target_ref.strip()
@@ -186,8 +191,8 @@ class GetEntityContextUseCase:
             key=lambda pair: (-pair[1].count, -pair[1].latest_world_time, pair[0]),
         )
         return [
-            EntityContextHotTopic(
-                topic_ref=topic_ref,
+            EntityContextHotTarget(
+                target_ref=topic_ref,
                 score=float(acc.count),
                 sample_event_ids=list(acc.sample_event_ids),
             )
@@ -197,16 +202,16 @@ class GetEntityContextUseCase:
     @staticmethod
     def _build_hot_view(
         *,
-        items: list[EntityContextHotTopic],
+        items: list[EntityContextHotTarget],
         limit: int,
-    ) -> EntityContextHotListView:
-        """构建热点视图结构。"""
+    ) -> EntityContextHotTargetListView:
+        """构建热点目标视图结构。"""
         visible_items = items[:limit]
         has_more = len(items) > limit
         next_cursor = None
         if has_more and visible_items:
-            next_cursor = visible_items[-1].topic_ref
-        return EntityContextHotListView(
+            next_cursor = visible_items[-1].target_ref
+        return EntityContextHotTargetListView(
             items=visible_items,
             next_cursor=next_cursor,
             has_more=has_more,
@@ -218,25 +223,23 @@ class GetEntityContextUseCase:
         return f"{item.world_time}:{item.event_id}"
 
     @staticmethod
-    def _collect_followed_entity_ids(
+    def _collect_neighbor_entity_ids(
         *,
         entity_id: str,
         items: list[EventSearchItem],
     ) -> set[str]:
-        """从近期事件中提取当前 Entity 已关注对象集合。"""
-        followed_entity_ids: set[str] = set()
+        """从近期事件中提取与当前 Entity 直接交互的邻居实体集合。"""
+        neighbor_entity_ids: set[str] = set()
         for item in items:
-            if item.subject_uuid != entity_id:
-                continue
-            if item.verb != "social.followed":
-                continue
             target_entity_id = GetEntityContextUseCase._extract_entity_id_from_target_ref(item.target_ref)
             if target_entity_id is None:
                 continue
-            if target_entity_id == entity_id:
+            if item.subject_uuid == entity_id and target_entity_id != entity_id:
+                neighbor_entity_ids.add(target_entity_id)
                 continue
-            followed_entity_ids.add(target_entity_id)
-        return followed_entity_ids
+            if target_entity_id == entity_id and item.subject_uuid != entity_id:
+                neighbor_entity_ids.add(item.subject_uuid)
+        return neighbor_entity_ids
 
     @staticmethod
     def _extract_entity_id_from_target_ref(target_ref: str) -> str | None:
@@ -251,18 +254,6 @@ class GetEntityContextUseCase:
             candidate = target_ref.split(":", maxsplit=1)[1]
             return candidate or None
         return target_ref
-
-    @staticmethod
-    def _is_status_event(
-        *,
-        item: EventSearchItem,
-        entity_id: str,
-        self_event_ids: set[str],
-    ) -> bool:
-        """判断事件是否属于“与我相关”的状态流。"""
-        if item.target_ref == entity_id or item.target_ref == f"entity:{entity_id}":
-            return True
-        return item.target_ref in self_event_ids
 
     @staticmethod
     def _to_search_item(*, event_id: str, payload: dict[str, object]) -> EventSearchItem:

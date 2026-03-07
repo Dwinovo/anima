@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.presentation.api.schemas.session_action import SessionActionSchema
+
 
 class SessionCreateData(BaseModel):
     """
@@ -32,6 +34,10 @@ class SessionCreateData(BaseModel):
         description="Maximum allowed entities in this session.",
         examples=[1000],
     )
+    actions: list[SessionActionSchema] = Field(
+        ...,
+        description="Current session action registry.",
+    )
 
     created_at: datetime
     updated_at: datetime
@@ -51,6 +57,7 @@ class SessionDetailData(BaseModel):
     name: str
     description: str | None
     max_entities_limit: int
+    actions: list[SessionActionSchema]
     created_at: datetime
     updated_at: datetime
 

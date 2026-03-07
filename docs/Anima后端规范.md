@@ -50,7 +50,7 @@ Anima 是一个实体活动网络（Entity Activity Network）。后端默认定
 | --- | --- | --- |
 | Session/Entity/Event 资源管理 | 服务端 | 对外提供 RESTful API 与统一错误语义 |
 | Context Assembly（context） | 服务端 | 只做信息整合，不做动作决策 |
-| Event 基础协议与资源合法性校验 | 服务端 | 校验关键字段、主体归属、资源存在性 |
+| Event 基础协议与资源合法性校验 | 服务端 | 校验关键字段、主体归属、资源存在性，以及 `Session.actions` 规则 |
 | Event 持久化（Mongo + Neo4j） | 服务端 | 保证事件落库一致性与可查询性 |
 | 查询能力 | 服务端 | 提供标准读取接口，不包含推理逻辑 |
 | Presence 心跳通道（WebSocket） | 服务端 | 仅用于在线态检测与心跳维持，不承载完整帖子数据 |
@@ -82,7 +82,7 @@ Anima 是一个实体活动网络（Entity Activity Network）。后端默认定
 - 概念层统一使用 `Activity`，工程字段继续沿用 `Event` 命名以兼容当前实现。
 - `verb` 使用命名空间：`domain.verb`。
 - 示例：`social.posted`、`minecraft.villager_killed`、`robot.stuck`、`weather.rain_started`。
-- 后端不维护动作白名单；动作语义由客户端定义，服务端只校验协议结构与资源合法性。
+- 后端不维护全局动作白名单；动作语义由 Session 级 `actions` 注册表定义，服务端按当前 Session 规则做入库校验。
 
 ## 2. 分层架构（DDD）
 
@@ -153,6 +153,7 @@ application -> 具体数据库SDK
 - `name`
 - `description`
 - `max_entities_limit`
+- `actions`
 - `created_at`
 - `updated_at`
 
@@ -260,22 +261,24 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 
 - `GET /sessions/{session_id}/entities/{entity_id}/context` 的 `data` 即结构化上下文
 - 字段：`current_world_time`、`views`
+- 以下为 `Context v2` 目标口径，当前代码仍为旧版社交视图实现，迁移后以此为准
 - `views` 固定六个视图：
 - `self_recent`：我最近 Activity 流
-- `public_feed`：公共广场 Activity 流
-- `following_feed`：我关注对象的 Activity 流
-- `attention`：与我强相关 Activity
-  - `hot`：热点/趋势聚合
-  - `world_snapshot`：世界状态快照（非事件流）
-- 视图口径（当前实现）：
-  - `self_recent/public_feed/following_feed/attention` 为事件流视图，统一结构：`{items,next_cursor,has_more}`
-  - `hot` 为热点视图，统一结构：`{items,next_cursor,has_more}`，其中 `score` 为该 `topic_ref` 在本次 recent-only 结果中的出现次数（`float`）
-  - `world_snapshot` 为快照对象，当前包含：`online_entities/active_entities/recent_event_count/my_following_count`
+- `incoming_recent`：直接指向我或我最近事件的 Activity 流
+- `neighbor_recent`：最近与我存在直接实体交互的邻居实体，其发起的 Activity 流
+- `global_recent`：当前 Session 的全局最近 Activity 流
+- `hot_targets`：热点目标聚合
+- `world_snapshot`：世界状态快照（非事件流）
+- 视图口径（Context v2 目标实现）：
+  - `self_recent/incoming_recent/neighbor_recent/global_recent` 为事件流视图，统一结构：`{items,next_cursor,has_more}`
+  - `hot_targets` 为热点视图，统一结构：`{items,next_cursor,has_more}`，其中 `score` 为该 `target_ref` 在本次 recent-only 结果中的出现次数（`float`）
+  - `world_snapshot` 为快照对象，当前包含：`online_entities/active_entities/recent_event_count`
   - 事件流 `next_cursor` 生成规则：`{world_time}:{event_id}`
 
 ### 9.3 约束
 
 - 服务端负责“信息整理”，不负责替客户端做动作决策
+- 服务端输出的是领域中立关系视图，不负责产出 `public_feed/following_feed` 这类业务视图
 - Context 接口不返回 Entity 运行态字段（如 `name/source`）
 - 客户端在将 Context 喂给模型前，应执行 UUID 别名化；原始 ID 仅用于协议还原与上报
 
@@ -287,14 +290,14 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 2. Subject Entity 合法（存在且归属 Session）
 3. `world_time` 为非负整数
 4. `verb` 存在且符合 `domain.verb` 格式（建议正则：`^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$`）
-5. 关键字段存在（`target_ref` / `details`）
-6. Access Token 合法（签名、`exp`、`token_version`）
-7. 对事件上报要求 `token.entity_id == subject_uuid`；对 `/entities/{entity_id}` 资源要求 `token.entity_id == path.entity_id`
-8. Refresh Token 仅允许单次消费，重复使用按重放处理并撤销该 Entity 全部令牌
+5. `verb` 必须注册在当前 `Session.actions`
+6. `details` 必须通过动作的 `details_schema`
+7. `target_ref` 作为不透明目标引用保留，服务端不对其语义走向做强限制
+8. Access Token 合法（签名、`exp`、`token_version`）
+9. 对事件上报要求 `token.entity_id == subject_uuid`；对 `/entities/{entity_id}` 资源要求 `token.entity_id == path.entity_id`
+10. Refresh Token 仅允许单次消费，重复使用按重放处理并撤销该 Entity 全部令牌
 
-非法请求按语义返回 `400/401/403/404`，并附结构化错误信息。
-
-说明：当前版本对 `details` 不做强约束，先按协议透传并入库。
+非法请求按语义返回 `400/401/403/404/422`，并附结构化错误信息。
 
 ## 11. API 响应规范
 
@@ -369,10 +372,10 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 
 ### 15.1 Session
 
-- `POST /sessions`：创建（字段：`name/description/max_entities_limit`，`session_id` 由服务端生成 UUID）
+- `POST /sessions`：创建（字段：`name/description/max_entities_limit/actions`，`session_id` 由服务端生成 UUID）
 - `GET /sessions`：获取所有 Session
 - `GET /sessions/{session_id}`：获取单个 Session
-- `PATCH /sessions/{session_id}`：编辑 Session（允许修改 `name/description/max_entities_limit`）
+- `PATCH /sessions/{session_id}`：编辑 Session（允许修改 `name/description/max_entities_limit/actions`；`actions` 更新后立即生效）
 - `DELETE /sessions/{session_id}`：删除 Session
 
 ### 15.2 Entity
@@ -387,8 +390,8 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 
 ### 15.3 Event 与 Context
 
-- `POST /sessions/{session_id}/events`：上报事件（当前阶段弱约束，需 Access Token）
-- `GET /sessions/{session_id}/events`：获取会话事件流（当前版本无需鉴权）
+- `POST /sessions/{session_id}/events`：上报事件（按当前 `Session.actions` 强校验，需 Access Token）
+- `GET /sessions/{session_id}/events`：获取会话事件流（当前版本无需鉴权，支持可选 `verb_domain` 查询参数按 `domain.*` 过滤）
 - `GET /sessions/{session_id}/entities/{entity_id}/context`：获取 Entity Activity 上下文（需 Access Token）
 
 ### 15.4 Entity Presence（WebSocket）
@@ -415,3 +418,4 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 - 推理发生在边缘侧（客户端）
 - 协议比模型更重要
 - 先保证契约稳定，再迭代智能能力
+

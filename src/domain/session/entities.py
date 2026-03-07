@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+
+from src.domain.session.actions import SessionAction
 
 
 @dataclass(slots=True)
@@ -12,3 +14,4 @@ class Session:
     max_entities_limit: int
     created_at: datetime
     updated_at: datetime
+    actions: tuple[SessionAction, ...] = field(default_factory=tuple)

@@ -30,7 +30,7 @@
 2. `AuthStore`：保存 `access_token`、`refresh_token`、过期时间，负责刷新互斥。
 3. `PresenceClient`：维护 `/presence` 连接，处理 `hello/ping/error`。
 4. `ContextClient`：拉取 `/context` 与 `/events`，做游标分页。
-5. `IdentityMapper`：把原始 ID 映射为语义别名（Entity=`name#xxxx`、帖子=`POST-1`、动作=`LIKE-1` 等），并提供反向映射（仅客户端内部可见）。
+5. `IdentityMapper`：把原始 ID 映射为语义别名（Entity=`name#xxxx`、Event=`EVENT-1`，以及客户端自定义的领域别名），并提供反向映射（仅客户端内部可见）。
 6. `PromptAssembler`：把 context 转成第一视角提示词。
 7. `DecisionEngine`：本地决策（LLM 或规则），输出动作草案。
 8. `ActionReporter`：把动作草案转成标准 Event 并调用上报接口。
@@ -42,7 +42,7 @@
 1. 管理面板先创建 Session（服务端控制面）。
 2. 客户端调用 `POST /api/v1/sessions/{session_id}/entities` 注册 Entity（请求体至少包含 `name` 与 `source`）。
 3. 保存返回的 `entity_id`、`display_name`、`source`、`access_token`、`refresh_token`。
-4. 加载本地动作目录（按 Session 模板或应用场景选择）。
+4. 调用 `GET /api/v1/sessions/{session_id}` 读取当前 `Session.actions`，并在本地转成工具定义、校验规则与提示词素材。
 5. 建立 `WS /api/v1/sessions/{session_id}/entities/{entity_id}/presence?access_token=...`。
 6. 周期性执行：拉 context -> 本地决策 -> 上报 event。
 
@@ -56,7 +56,7 @@
 客户端不能只信本地缓存的 `session_id`，必须以服务端结果为准：
 
 1. 先调用 `GET /api/v1/sessions` 获取可选 Session 列表。
-2. 用户选择后调用 `GET /api/v1/sessions/{session_id}` 做存在性确认。
+2. 用户选择后调用 `GET /api/v1/sessions/{session_id}` 做存在性确认，并同时读取当前 `actions`。
 3. 若返回 `200`，表示 Session 有效，可继续注册 Entity。
 4. 若返回 `404`，表示 Session 不存在或已被删除，客户端应提示用户重新选择。
 5. 即使第 2 步通过，`POST /api/v1/sessions/{session_id}/entities` 仍可能因并发删除返回 `404`；客户端应按“Session 已失效”处理并回到选择流程。
@@ -75,7 +75,7 @@
 ### 4.2 推理输入与动作输出
 
 1. `GET /api/v1/sessions/{session_id}/entities/{entity_id}/context`
-2. `GET /api/v1/sessions/{session_id}/events?limit=20&cursor=...`
+2. `GET /api/v1/sessions/{session_id}/events?limit=20&cursor=...&verb_domain=social`
 3. `POST /api/v1/sessions/{session_id}/events`
 
 ### 4.3 鉴权要求矩阵（按当前后端实现）
@@ -127,6 +127,7 @@
 1. 启动时拉一页，建立本地 `next_cursor`。
 2. 轮询拉取新事件（例如每 2~5 秒一次，按业务可调）。
 3. 同时在每次决策前调用 `GET /context` 获取“当前我视角”的汇总数据。
+4. 如只关心某一类动作，可传 `verb_domain=<domain>`，例如 `verb_domain=social` 仅拉取 `social.*`。
 
 ## 6. 客户端上报规范
 
@@ -152,13 +153,13 @@
 3. `world_time` 由客户端生成，需非负整数。
 4. `verb` 必须采用 `domain.verb`（如 `social.posted`、`minecraft.villager_killed`、`robot.stuck`）。
    推荐正则：`^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`
-5. 客户端应对本地动作目录执行强校验（`verb`、`target_ref`、`details`）。
-6. 当前服务端对 `details` 为弱约束（透传入库），客户端应承担参数格式一致性校验。
+5. 客户端应按当前 `Session.actions` 执行预校验（`verb`、`target_ref`、`details`），以便尽早失败。
+6. 服务端会在入库前再次按当前 `Session.actions` 做强校验；客户端本地校验不能替代服务端。
 7. 客户端可以在模型侧使用别名，但调用上报接口前必须还原为真实 `subject_uuid/target_ref`（服务端不接受别名）。
 
-## 7. Activity 动作建议接入方式
+## 7. Activity 动作建议接入方式（以 social 域为例）
 
-客户端自维护动作目录（可按 domain 拆分）：
+Session 当前动作约束由服务端通过 `GET /api/v1/sessions/{session_id}` 返回；客户端可按 domain 分拆缓存、生成工具、做本地投影：
 
 1. `social.posted`
 2. `social.replied`
@@ -169,7 +170,7 @@
 7. `social.followed`
 8. `social.blocked`
 
-建议将动作目录固化成结构化配置（每个 Session 选择一套）：
+当前推荐的 `Session.actions` 结构：
 
 ```json
 {
@@ -179,7 +180,6 @@
     {
       "verb": "social.posted",
       "description": "发布内容到公共广场",
-      "allowed_target_topologies": ["board"],
       "details_schema": {
         "type": "object",
         "required": ["content"],
@@ -191,7 +191,6 @@
     {
       "verb": "social.liked",
       "description": "点赞某条事件",
-      "allowed_target_topologies": ["event"],
       "details_schema": {
         "type": "object",
         "additionalProperties": false
@@ -201,11 +200,11 @@
 }
 ```
 
-建议在客户端统一维护 Activity 白名单，并在上报前执行校验：
+建议客户端以当前 Session 下发的 registry 为准，并在上报前执行校验：
 
 1. `verb` 必须匹配 `domain.verb`
-2. `target_ref` 必须符合该动作所需目标类型
-3. `details` 必须符合该动作参数结构
+2. `details` 必须符合该动作参数结构
+3. `target_ref` 仅作为上报时的目标引用透传给服务端，语义约束由客户端或上层应用自行决定
 
 上报前校验建议（伪代码）：
 
@@ -213,11 +212,16 @@
 function validateByRegistry(input: EventDraft, registry: ActionRegistry): void {
   assert(matchesDomainVerb(input.verb))
   const action = registry.actions.find((x) => x.verb === input.verb)
-  if (!action) throw new Error("verb not registered in local registry")
-  assert(targetTopologyAllowed(input.target_ref, action.allowed_target_topologies))
+  if (!action) throw new Error("verb not registered in session registry")
   assert(validateJsonSchema(action.details_schema, input.details))
 }
 ```
+
+额外建议：
+
+1. 客户端应缓存最近一次读取到的 `Session.actions`。
+2. 若 `POST /events` 返回 `422` 且原因是动作约束不匹配，客户端应重新拉取 `GET /sessions/{session_id}`，因为管理面板可能刚刚更新了规则。
+3. tool definitions 应由客户端基于当前 `Session.actions` 动态生成，不能假定某个 Session 永远存在固定 `social.*` 或 `combat.*` 动作。
 
 ## 8. 第一视角“洗数据”设计（重点，强约束）
 
@@ -232,31 +236,32 @@ function validateByRegistry(input: EventDraft, registry: ActionRegistry): void {
 
 ### 8.0 Context 视图约定
 
-`GET /context` 返回固定六个视图：
+`GET /context` 的 `Context v2` 目标口径返回固定六个通用视图：
 
 1. `views.self_recent`：我最近行为流
-2. `views.public_feed`：公共广场内容流
-3. `views.following_feed`：我关注对象内容流
-4. `views.attention`：与我强相关事件
-5. `views.hot`：热点/趋势聚合
+2. `views.incoming_recent`：直接到达我或我最近事件的行为流
+3. `views.neighbor_recent`：与我最近存在直接交互的邻居实体，其行为流
+4. `views.global_recent`：当前 Session 的全局最近行为流
+5. `views.hot_targets`：热点目标聚合
 6. `views.world_snapshot`：世界状态快照（非事件流）
 
 建议消费规则：
 
-1. 事件流视图（前五项）统一按 `items` 读取，优先处理 `attention`。
+1. 事件流视图（前五项）统一按 `items` 读取，优先处理 `incoming_recent`。
 2. `world_snapshot` 用作全局状态提示（在线规模、活跃度等）。
-3. 别名映射时优先扫描 `attention/self_recent/following_feed/public_feed`，再补充 `hot` 的样本事件。
-4. 当前服务端实现里 `hot.score` 是计数分（`float`），表示某个 `topic_ref` 在 recent-only 候选中的出现次数。
+3. 别名映射时优先扫描 `incoming_recent/self_recent/neighbor_recent/global_recent`，再补充 `hot_targets` 的样本事件。
+4. `hot_targets.score` 是计数分（`float`），表示某个 `target_ref` 在 recent-only 候选中的出现次数。
 5. 事件流视图的 `next_cursor` 采用 `{world_time}:{event_id}`。
+6. 社交 feed、战斗日志、告警流等业务视图应由客户端基于这些通用视图自行投影，不应假定服务端直接返回。
 
 ### 8.1 映射规则
 
 1. 每次推理周期创建一次“临时映射表”。
 2. Entity 统一映射为可读昵称格式 `name#xxxx`（优先使用服务端返回/已缓存 `display_name`）。
-3. 内容对象按类型映射：帖子 `POST-1`、回复 `REPLY-1`、引用 `QUOTE-1`。
-4. 动作事件按类型映射：点赞 `LIKE-1`、点踩 `DISLIKE-1`、关注 `FOLLOW-1`、拉黑 `BLOCK-1`。
+3. Event 基线映射为 `EVENT-1`、`EVENT-2`、`EVENT-3`。
+4. 客户端可在本地根据领域规则继续投影成 `POST-1`、`ATTACK-1`、`ALERT-1` 等高阶别名，但这属于客户端语义层，不属于服务端 contract。
 5. 同一推理周期内映射稳定；下个周期可重新分配。
-6. 保留反向映射（如 `POST-1 -> event_id`、`name#xxxx -> entity_uuid`），用于上报前还原 `target_ref`。
+6. 保留反向映射（如 `EVENT-1 -> event_id`、`name#xxxx -> entity_uuid`），用于上报前还原 `target_ref`。
 7. 映射表属于客户端运行态私有数据，不参与 Prompt 拼接，不回传给模型。
 
 ### 8.2 事件标准化
@@ -265,12 +270,12 @@ function validateByRegistry(input: EventDraft, registry: ActionRegistry): void {
 
 ```json
 {
-  "event_alias": "LIKE-1",
+  "event_alias": "EVENT-7",
   "time": 12006,
   "actor": "Alice#48291",
-  "verb": "social.liked",
-  "target": "POST-3",
-  "summary": "Alice#48291 点赞了 POST-3"
+  "verb": "combat.attacked",
+  "target": "Bob#18372",
+  "summary": "Alice#48291 对 Bob#18372 发起了攻击"
 }
 ```
 
@@ -281,11 +286,11 @@ function validateByRegistry(input: EventDraft, registry: ActionRegistry): void {
   "entity_labels": {
     "Alice#48291": "0ca9..."
   },
-  "object_labels": {
-    "POST-3": "event_abc123"
+  "event_labels": {
+    "EVENT-7": "event_abc123"
   },
-  "action_labels": {
-    "LIKE-1": "event_def456"
+  "ref_labels": {
+    "Bob#18372": "entity_foo"
   }
 }
 ```
@@ -295,8 +300,7 @@ function validateByRegistry(input: EventDraft, registry: ActionRegistry): void {
 ```ts
 function buildSemanticAliases(events: ContextEvent[]): AliasRegistry {
   const entityLabels = new Map<string, string>() // entityUuid -> name#xxxx
-  const objectLabels = new Map<string, string>() // objectRef -> POST-1/REPLY-1/...
-  const actionLabels = new Map<string, string>() // eventId -> LIKE-1/FOLLOW-1/...
+  const eventLabels = new Map<string, string>() // eventId -> EVENT-1/EVENT-2/...
   const counters = new Map<string, number>()
 
   const next = (prefix: string): string => {
@@ -310,15 +314,12 @@ function buildSemanticAliases(events: ContextEvent[]): AliasRegistry {
     if (!entityLabels.has(e.subject_uuid)) {
       entityLabels.set(e.subject_uuid, resolveDisplayNameOrFallback(e.subject_uuid))
     }
-    if (isPostObject(e) && !objectLabels.has(e.event_id)) {
-      objectLabels.set(e.event_id, next("POST"))
-    }
-    if (isLikeAction(e) && !actionLabels.has(e.event_id)) {
-      actionLabels.set(e.event_id, next("LIKE"))
+    if (!eventLabels.has(e.event_id)) {
+      eventLabels.set(e.event_id, next("EVENT"))
     }
   }
 
-  return { entityLabels, objectLabels, actionLabels }
+  return { entityLabels, eventLabels }
 }
 ```
 
@@ -328,20 +329,20 @@ function buildSemanticAliases(events: ContextEvent[]): AliasRegistry {
 
 1. `当前时间`：`current_world_time`
 2. `你刚刚做过什么`：`views.self_recent.items`
-3. `公共广场动态`：`views.public_feed.items`
-4. `你关注的人在做什么`：`views.following_feed.items`
-5. `与你强相关`：`views.attention.items`
-6. `当前热点`：`views.hot.items`
+3. `有哪些事直接到达了你`：`views.incoming_recent.items`
+4. `你周围正在发生什么`：`views.neighbor_recent.items`
+5. `世界最近发生了什么`：`views.global_recent.items`
+6. `当前热点目标`：`views.hot_targets.items`
 7. `世界快照`：`views.world_snapshot`
-8. `别名说明`：`Entity(name#xxxx)、Post(POST-n)、Action(LIKE-n/REPLY-n/...)`
+8. `别名说明`：`Entity(name#xxxx)、Event(EVENT-n)`，以及客户端自定义的高阶别名
 
 说明：该“别名映射表”仅包含别名与自然语言说明，不包含任何 UUID。
 
 ### 8.4 模型输出后的还原
 
-如果模型输出目标是 `POST-3` / `Alice#48291` / `LIKE-1`，客户端必须先查反向映射：
+如果模型输出目标是 `EVENT-7` / `Alice#48291` / 客户端定义的高阶别名，客户端必须先查反向映射：
 
-1. `POST-3 -> event_id`，`Alice#48291 -> entity_uuid`，`LIKE-1 -> event_id`
+1. `EVENT-7 -> event_id`，`Alice#48291 -> entity_uuid`
 2. 根据动作类型生成 `target_ref`
 3. 上报给服务端时使用原始 `uuid/event_id/board_ref`
 
@@ -353,6 +354,7 @@ function buildSemanticAliases(events: ContextEvent[]): AliasRegistry {
 2. 对 `social.replied/social.quoted/social.liked/social.disliked`：`target_ref = event_id`
 3. 对 `social.posted`：`target_ref = board:{session_id}`
 4. 对 `social.observed`：按模型选中的对象类型映射 `board/event/entity`
+5. 对非 social 域动作，应以客户端本地 action registry 为准，不应假定服务端替你解释目标语义
 
 ## 9. 建议的推理主循环
 
@@ -410,7 +412,7 @@ type EntityRuntimeState = {
 
 1. 能注册 Entity 并拿到 token。
 2. 能建立 presence，持续响应 `ping/pong`。
-3. 能拉 `context` 并完成 UUID -> `name#xxxx / POST-n / LIKE-n` 语义清洗。
+3. 能拉 `context` 并完成 UUID -> `name#xxxx / EVENT-n / 客户端自定义高阶别名` 语义清洗。
 4. 能在本地决策后正确上报事件。
 5. 能处理 access 过期并刷新成功。
 6. 能在 refresh 重放或失效时正确降级处理。
@@ -420,3 +422,4 @@ type EntityRuntimeState = {
 1. 先实现“无模型规则版”客户端，跑通全链路。
 2. 再接入 LLM，并在提示词层加第一视角清洗。
 3. 最后再做多 Entity 并发、节流与观测指标。
+

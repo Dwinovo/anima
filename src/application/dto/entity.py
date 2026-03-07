@@ -32,19 +32,19 @@ class EntityContextEventListView:
 
 
 @dataclass(slots=True)
-class EntityContextHotTopic:
-    """Entity 上下文热点项 DTO。"""
+class EntityContextHotTarget:
+    """Entity 上下文热点目标项 DTO。"""
 
-    topic_ref: str
+    target_ref: str
     score: float
     sample_event_ids: list[str]
 
 
 @dataclass(slots=True)
-class EntityContextHotListView:
-    """Entity 上下文热点视图 DTO。"""
+class EntityContextHotTargetListView:
+    """Entity 上下文热点目标视图 DTO。"""
 
-    items: list[EntityContextHotTopic]
+    items: list[EntityContextHotTarget]
     next_cursor: str | None
     has_more: bool
 
@@ -56,7 +56,6 @@ class EntityContextWorldSnapshot:
     online_entities: int
     active_entities: int
     recent_event_count: int
-    my_following_count: int
 
 
 @dataclass(slots=True)
@@ -64,10 +63,10 @@ class EntityContextViews:
     """Entity 上下文六视图 DTO。"""
 
     self_recent: EntityContextEventListView
-    public_feed: EntityContextEventListView
-    following_feed: EntityContextEventListView
-    attention: EntityContextEventListView
-    hot: EntityContextHotListView
+    incoming_recent: EntityContextEventListView
+    neighbor_recent: EntityContextEventListView
+    global_recent: EntityContextEventListView
+    hot_targets: EntityContextHotTargetListView
     world_snapshot: EntityContextWorldSnapshot
 
 
@@ -83,8 +82,8 @@ class EntityContextResult:
 
 __all__ = [
     "EntityContextEventListView",
-    "EntityContextHotListView",
-    "EntityContextHotTopic",
+    "EntityContextHotTarget",
+    "EntityContextHotTargetListView",
     "EntityContextResult",
     "EntityContextViews",
     "EntityContextWorldSnapshot",

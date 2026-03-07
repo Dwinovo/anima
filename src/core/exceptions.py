@@ -80,3 +80,14 @@ class AuthorizationDeniedException(AnimaException):
             code=40302,
             message=message,
         )
+
+
+class EventActionValidationException(AnimaException):
+    def __init__(self, *, message: str, details: dict[str, Any] | None = None) -> None:
+        """初始化对象并注入所需依赖。"""
+        super().__init__(
+            status_code=422,
+            code=42201,
+            message=message,
+            details=details,
+        )

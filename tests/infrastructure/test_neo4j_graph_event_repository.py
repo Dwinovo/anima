@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.infrastructure.persistence.neo4j.cypher import RECENT_EVENT_IDS
 from src.infrastructure.persistence.neo4j.graph_event_repository import Neo4jGraphEventRepository
 
 
@@ -22,3 +23,9 @@ def test_extract_target_entity_ref_rejects_object_refs() -> None:
     assert Neo4jGraphEventRepository._extract_target_entity_ref("board:session_demo") is None
     assert Neo4jGraphEventRepository._extract_target_entity_ref("event_123") is None
     assert Neo4jGraphEventRepository._extract_target_entity_ref("object:post_1") is None
+
+
+def test_recent_event_ids_query_supports_verb_domain_prefix_filter() -> None:
+    """验证近期事件查询包含基于动词域前缀的过滤条件。"""
+    assert "$verb_prefix IS NULL" in RECENT_EVENT_IDS
+    assert "e.verb STARTS WITH $verb_prefix" in RECENT_EVENT_IDS

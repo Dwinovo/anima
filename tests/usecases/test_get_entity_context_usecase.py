@@ -215,7 +215,7 @@ class InMemoryGraphRepository:
 
 @pytest.mark.asyncio
 async def test_get_entity_context_usecase_returns_views_payload() -> None:
-    """验证上下文分流为 views 六视图结构。"""
+    """验证上下文分流为 Context v2 的通用六视图结构。"""
     session_repo = InMemorySessionRepository()
     await session_repo.create(
         session_id="session_demo",
@@ -228,7 +228,7 @@ async def test_get_entity_context_usecase_returns_views_payload() -> None:
         payloads={
             "event_7": {
                 "world_time": 207,
-                "verb": "social.liked",
+                "verb": "observe.flagged",
                 "subject_uuid": "entity_x",
                 "target_ref": "event_6",
                 "details": {},
@@ -236,48 +236,48 @@ async def test_get_entity_context_usecase_returns_views_payload() -> None:
             },
             "event_6": {
                 "world_time": 206,
-                "verb": "social.posted",
+                "verb": "observe.logged",
                 "subject_uuid": "entity_me",
                 "target_ref": "board:session_demo",
-                "details": {"content": "hello"},
+                "details": {"summary": "hello"},
                 "schema_version": 1,
             },
             "event_5": {
                 "world_time": 205,
-                "verb": "social.posted",
-                "subject_uuid": "entity_followed",
+                "verb": "observe.reported",
+                "subject_uuid": "entity_neighbor",
                 "target_ref": "board:session_demo",
-                "details": {"content": "followed"},
+                "details": {"summary": "north noise"},
                 "schema_version": 1,
             },
             "event_4": {
                 "world_time": 204,
-                "verb": "social.posted",
-                "subject_uuid": "entity_other",
-                "target_ref": "board:session_demo",
-                "details": {"content": "public"},
+                "verb": "combat.attacked",
+                "subject_uuid": "entity_neighbor",
+                "target_ref": "entity:entity_me",
+                "details": {"damage": 8},
                 "schema_version": 1,
             },
             "event_3": {
                 "world_time": 203,
-                "verb": "social.followed",
-                "subject_uuid": "entity_me",
-                "target_ref": "entity_followed",
-                "details": {},
+                "verb": "weather.rain_started",
+                "subject_uuid": "entity_other",
+                "target_ref": "board:session_demo",
+                "details": {"intensity": "light"},
                 "schema_version": 1,
             },
             "event_2": {
                 "world_time": 202,
-                "verb": "social.replied",
-                "subject_uuid": "entity_x",
-                "target_ref": "event_6",
-                "details": {"content": "to me"},
+                "verb": "observe.checked",
+                "subject_uuid": "entity_me",
+                "target_ref": "entity:entity_partner",
+                "details": {},
                 "schema_version": 1,
             },
             "event_1": {
                 "world_time": 201,
-                "verb": "social.followed",
-                "subject_uuid": "entity_x",
+                "verb": "observe.pinged",
+                "subject_uuid": "entity_partner",
                 "target_ref": "entity:entity_me",
                 "details": {},
                 "schema_version": 1,
@@ -312,23 +312,32 @@ async def test_get_entity_context_usecase_returns_views_payload() -> None:
     assert result.session_id == "session_demo"
     assert result.entity_id == "entity_me"
     assert result.current_world_time == 207
-    assert [item.event_id for item in result.views.self_recent.items] == ["event_6", "event_3"]
-    assert [item.event_id for item in result.views.attention.items] == ["event_7", "event_2", "event_1"]
-    assert [item.event_id for item in result.views.following_feed.items] == ["event_5"]
-    assert [item.event_id for item in result.views.public_feed.items] == ["event_4"]
+    assert [item.event_id for item in result.views.self_recent.items] == ["event_6", "event_2"]
+    assert [item.event_id for item in result.views.incoming_recent.items] == ["event_7", "event_4", "event_1"]
+    assert [item.event_id for item in result.views.neighbor_recent.items] == ["event_5"]
+    assert [item.event_id for item in result.views.global_recent.items] == [
+        "event_7",
+        "event_6",
+        "event_5",
+        "event_4",
+        "event_3",
+        "event_2",
+        "event_1",
+    ]
     assert result.views.self_recent.next_cursor is None
     assert result.views.self_recent.has_more is False
-    assert result.views.following_feed.next_cursor is None
-    assert result.views.following_feed.has_more is False
-    assert result.views.hot.next_cursor is None
-    assert result.views.hot.has_more is False
-    assert result.views.hot.items[0].topic_ref == "board:session_demo"
-    assert result.views.hot.items[0].score == 3.0
-    assert result.views.hot.items[0].sample_event_ids == ["event_6", "event_5", "event_4"]
+    assert result.views.neighbor_recent.next_cursor is None
+    assert result.views.neighbor_recent.has_more is False
+    assert result.views.global_recent.next_cursor is None
+    assert result.views.global_recent.has_more is False
+    assert result.views.hot_targets.next_cursor is None
+    assert result.views.hot_targets.has_more is False
+    assert result.views.hot_targets.items[0].target_ref == "board:session_demo"
+    assert result.views.hot_targets.items[0].score == 3.0
+    assert result.views.hot_targets.items[0].sample_event_ids == ["event_6", "event_5", "event_3"]
     assert result.views.world_snapshot.online_entities == 1
     assert result.views.world_snapshot.active_entities == 1
     assert result.views.world_snapshot.recent_event_count == 7
-    assert result.views.world_snapshot.my_following_count == 1
 
 
 @pytest.mark.asyncio
