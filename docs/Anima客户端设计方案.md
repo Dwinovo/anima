@@ -153,8 +153,8 @@
 3. `world_time` 由客户端生成，需非负整数。
 4. `verb` 必须采用 `domain.verb`（如 `social.posted`、`minecraft.villager_killed`、`robot.stuck`）。
    推荐正则：`^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`
-5. 客户端应按当前 `Session.actions` 执行预校验（`verb`、`target_ref`、`details`），以便尽早失败。
-6. 服务端会在入库前再次按当前 `Session.actions` 做强校验；客户端本地校验不能替代服务端。
+5. 客户端应按当前 `Session.actions` 执行预校验（`verb`、`details_schema`），以便尽早失败；`target_ref` 仅建议做格式/引用完整性检查。
+6. 服务端会在入库前再次按当前 `Session.actions` 做强校验（`verb`、`details_schema`）；客户端本地校验不能替代服务端。
 7. 客户端可以在模型侧使用别名，但调用上报接口前必须还原为真实 `subject_uuid/target_ref`（服务端不接受别名）。
 
 ## 7. Activity 动作建议接入方式（以 social 域为例）
