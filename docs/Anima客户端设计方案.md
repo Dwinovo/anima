@@ -184,7 +184,11 @@ Session 当前动作约束由服务端通过 `GET /api/v1/sessions/{session_id}`
         "type": "object",
         "required": ["content"],
         "properties": {
-          "content": {"type": "string", "minLength": 1}
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "post content text"
+          }
         }
       }
     },
@@ -204,7 +208,8 @@ Session 当前动作约束由服务端通过 `GET /api/v1/sessions/{session_id}`
 
 1. `verb` 必须匹配 `domain.verb`
 2. `details` 必须符合该动作参数结构
-3. `target_ref` 仅作为上报时的目标引用透传给服务端，语义约束由客户端或上层应用自行决定
+3. `details_schema.properties` 的每个参数必须提供非空 `description`（含嵌套 object/array 参数）
+4. `target_ref` 仅作为上报时的目标引用透传给服务端，语义约束由客户端或上层应用自行决定
 
 上报前校验建议（伪代码）：
 

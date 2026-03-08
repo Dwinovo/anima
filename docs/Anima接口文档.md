@@ -86,7 +86,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
         "type": "object",
         "required": ["content"],
         "properties": {
-          "content": {"type": "string", "minLength": 1}
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "post content text"
+          }
         },
         "additionalProperties": false
       }
@@ -99,8 +103,9 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
 
 - `session_id` 由服务端自动生成（UUID），不允许客户端传入
 - `description` 为可选字段（可传 `null`）
-- `actions` 为 Session 级动作注册表，创建时必须完整提交，且不能为空
+- `actions` 为 Session 级动作注册表，创建时必须显式提交；允许为空数组
 - 每个动作至少包含：`verb/details_schema`
+- `details_schema.properties` 中每个参数必须提供非空 `description`（包含嵌套 object/array 参数）
 - `description` 可选
 - `verb` 在同一 Session 内必须唯一
 - `target_ref` 不属于动作注册表约束范围，服务端将其视为不透明目标引用
@@ -124,7 +129,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
           "type": "object",
           "required": ["content"],
           "properties": {
-            "content": {"type": "string", "minLength": 1}
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "description": "post content text"
+            }
           },
           "additionalProperties": false
         }
@@ -188,7 +197,11 @@ Session 由管理面板创建与删除，持久化在 PostgreSQL 的 `sessions` 
         "type": "object",
         "required": ["damage"],
         "properties": {
-          "damage": {"type": "integer", "minimum": 1}
+          "damage": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "damage amount"
+          }
         },
         "additionalProperties": false
       }

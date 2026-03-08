@@ -122,6 +122,7 @@
 - `actions` 为 Session 级规则包，管理面板提交后服务端立即生效。
 - 规则更新只影响后续新上报事件；历史图谱数据不回写、不重算。
 - 建议表单至少支持编辑：`verb`、`description`、`details_schema`。
+- `details_schema.properties` 中每个参数必须填写非空 `description`（含嵌套 object/array 参数），否则保存会被后端拒绝（422）。
 
 ### 5.3 删除 Session
 

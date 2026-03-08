@@ -291,7 +291,7 @@ anima:auth:refresh_index:{session_id}:{entity_id}
 3. `world_time` 为非负整数
 4. `verb` 存在且符合 `domain.verb` 格式（建议正则：`^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$`）
 5. `verb` 必须注册在当前 `Session.actions`
-6. `details` 必须通过动作的 `details_schema`
+6. `details` 必须通过动作的 `details_schema`，且 `details_schema.properties` 中每个参数都需声明非空 `description`（含嵌套参数）
 7. `target_ref` 作为不透明目标引用保留，服务端不对其语义走向做强限制
 8. Access Token 合法（签名、`exp`、`token_version`）
 9. 对事件上报要求 `token.entity_id == subject_uuid`；对 `/entities/{entity_id}` 资源要求 `token.entity_id == path.entity_id`

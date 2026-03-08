@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from src.domain.session.actions import SessionAction
 from src.presentation.api.schemas.requests.session import SessionCreateRequest, SessionPatchRequest
+from src.presentation.api.schemas.session_action import SessionActionSchema
 
 
 def build_actions_payload() -> list[dict[str, object]]:
@@ -19,6 +21,7 @@ def build_actions_payload() -> list[dict[str, object]]:
                     "content": {
                         "type": "string",
                         "minLength": 1,
+                        "description": "post content",
                     }
                 },
                 "additionalProperties": False,
@@ -57,6 +60,20 @@ def test_session_create_request_requires_actions() -> None:
     assert any(error["loc"] == ("actions",) for error in exc_info.value.errors())
 
 
+def test_session_create_request_accepts_empty_actions() -> None:
+    """验证创建 Session 时 actions 可为空数组。"""
+    request = SessionCreateRequest.model_validate(
+        {
+            "name": "Alpha Session",
+            "description": "demo",
+            "max_entities_limit": 100,
+            "actions": [],
+        }
+    )
+
+    assert request.actions == []
+
+
 def test_session_create_request_rejects_client_session_id() -> None:
     """验证创建请求不允许客户端自带 session_id。"""
     with pytest.raises(ValidationError):
@@ -85,6 +102,16 @@ def test_session_patch_request_accepts_core_patch_fields() -> None:
     assert request.max_entities_limit == 120
     assert request.actions is not None
     assert request.actions[0].verb == "social.posted"
+
+
+def test_session_patch_request_accepts_empty_actions() -> None:
+    """验证 PATCH 时 actions 可显式更新为空数组。"""
+    request = SessionPatchRequest.model_validate(
+        {
+            "actions": [],
+        }
+    )
+    assert request.actions == []
 
 
 def test_session_create_request_rejects_duplicate_verbs() -> None:
@@ -194,3 +221,95 @@ def test_session_create_request_rejects_target_constraints_field() -> None:
                 ],
             }
         )
+
+
+def test_session_create_request_rejects_action_parameter_without_description() -> None:
+    """验证 details_schema 的参数必须声明 description。"""
+    payload = {
+        "name": "Alpha Session",
+        "description": "demo",
+        "max_entities_limit": 100,
+        "actions": [
+            {
+                "verb": "social.posted",
+                "description": "post to session board",
+                "details_schema": {
+                    "type": "object",
+                    "required": ["content"],
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "minLength": 1,
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        SessionCreateRequest.model_validate(payload)
+
+    assert "description" in str(exc_info.value)
+
+
+def test_session_create_request_rejects_nested_parameter_without_description() -> None:
+    """验证嵌套 object 参数也必须声明 description。"""
+    payload = {
+        "name": "Alpha Session",
+        "description": "demo",
+        "max_entities_limit": 100,
+        "actions": [
+            {
+                "verb": "social.posted",
+                "description": "post to session board",
+                "details_schema": {
+                    "type": "object",
+                    "required": ["meta"],
+                    "properties": {
+                        "meta": {
+                            "type": "object",
+                            "description": "post metadata",
+                            "properties": {
+                                "topic": {
+                                    "type": "string",
+                                }
+                            },
+                            "required": ["topic"],
+                            "additionalProperties": False,
+                        }
+                    },
+                    "additionalProperties": False,
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        SessionCreateRequest.model_validate(payload)
+
+    assert "description" in str(exc_info.value)
+
+
+def test_session_action_response_from_domain_normalizes_legacy_details_schema() -> None:
+    """验证响应序列化兼容历史缺少参数 description 的动作配置。"""
+    legacy_action = SessionAction(
+        verb="social.posted",
+        description="legacy action",
+        details_schema={
+            "type": "object",
+            "required": ["content"],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "minLength": 1,
+                }
+            },
+            "additionalProperties": False,
+        },
+    )
+
+    response_item = SessionActionSchema.from_domain(legacy_action)
+
+    assert response_item.details_schema["properties"]["content"]["description"]

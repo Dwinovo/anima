@@ -37,8 +37,7 @@ class SessionCreateRequest(BaseModel):
     )
     actions: list[SessionActionSchema] = Field(
         ...,
-        min_length=1,
-        description="Session 级动作注册表，创建时必须完整提交。",
+        description="Session 级动作注册表，创建时必须显式提交，可为空数组。",
     )
 
     @field_validator("actions")
@@ -82,8 +81,7 @@ class SessionPatchRequest(BaseModel):
     )
     actions: list[SessionActionSchema] | None = Field(
         default=None,
-        min_length=1,
-        description="可选更新 Session 级动作注册表；提交后立即生效。",
+        description="可选更新 Session 级动作注册表（可为空数组）；提交后立即生效。",
     )
 
     @field_validator("actions")
