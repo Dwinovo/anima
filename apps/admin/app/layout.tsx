@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import {
   Sidebar,
   SidebarContent,
@@ -9,22 +8,6 @@ import {
 } from "@/components/ui/sidebar";
 import { AdminSidebarNav } from "@/components/admin-sidebar-nav";
 import "./globals.css";
-
-const bodyFont = localFont({
-  src: "./fonts/NotoSansCJKsc-VF.ttf",
-  variable: "--font-body-local",
-  weight: "100 900",
-  display: "swap",
-  fallback: ["system-ui", "sans-serif"],
-});
-
-const headingFont = localFont({
-  src: "./fonts/NotoSerifCJKsc-VF.ttf",
-  variable: "--font-heading-local",
-  weight: "200 900",
-  display: "swap",
-  fallback: ["serif"],
-});
 
 export const metadata: Metadata = {
   title: "Anima Admin",
@@ -38,9 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${bodyFont.variable} ${headingFont.variable} antialiased`}
-      >
+      <body className="antialiased">
         <SidebarProvider>
           <Sidebar collapsible="icon">
             <SidebarHeader className="gap-4 p-4">

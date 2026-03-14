@@ -24,6 +24,7 @@ coverage/
 out/
 build/
 .vercel
+apps/admin/app/fonts/
 *.pem
 *.tsbuildinfo
 next-env.d.ts

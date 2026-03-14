@@ -9,7 +9,7 @@
 - `apps/admin/app/` 是页面入口；`layout.tsx` 已挂载全局 Sidebar 壳，当前只保留两个导航模块：`总览`、`会话`。
 - `apps/admin/package.json` 提供 `dev`、`build`、`start`、`lint` 脚本。
 - 管理面板 UI 基线统一为 `neobrutalism` 组件风格，组件通过 `shadcn` registry 引入。
-- 字体基线：正文使用 `NotoSansCJKsc`，标题使用 `NotoSerifCJKsc`，通过 `app/fonts` 的本地字体变量注入。
+- 字体基线：正文使用 `Noto Sans CJK SC` 系统字体栈，标题使用 `Noto Serif CJK SC` 系统字体栈，通过 CSS 变量注入；不在仓库跟踪字体二进制文件。
 - 侧边栏会根据当前路由高亮 `总览` 或 `会话`。
 - Logo 牌仅保留 hover 动效，不提供按下态点击反馈。
 - 右侧内容区（`SidebarInset`）当前统一使用 `#dcebfe` 背景色。
@@ -33,7 +33,6 @@
 - [../apps/admin/package.json](../apps/admin/package.json)
 - [../apps/admin/components/ui/sidebar.tsx](../apps/admin/components/ui/sidebar.tsx)
 - [../apps/admin/components/admin-sidebar-nav.tsx](../apps/admin/components/admin-sidebar-nav.tsx)
-- [../apps/admin/app/fonts](../apps/admin/app/fonts)
 - [../apps/admin/app/layout.tsx](../apps/admin/app/layout.tsx)
 - [../apps/admin/app/page.tsx](../apps/admin/app/page.tsx)
 - [../apps/admin/app/overview/page.tsx](../apps/admin/app/overview/page.tsx)

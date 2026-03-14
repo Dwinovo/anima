@@ -4,6 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --font-body-local:
+    "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --font-heading-local:
+    "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
   --background: oklch(93.46% 0.0305 255.11);
   --secondary-background: oklch(100% 0 0);
   --foreground: oklch(0% 0 0);
