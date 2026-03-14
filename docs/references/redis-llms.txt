@@ -1,0 +1,21 @@
+Redis reference for this repo
+
+Library role
+- Redis stores short-lived runtime state, online presence, display-name uniqueness, and auth token status.
+- Current dependency is `redis>=5.3.1`.
+
+Core patterns
+- Use explicit key builders from `backend/src/infrastructure/persistence/redis/keys.py`.
+- Separate runtime data from auth data by prefix.
+- Presence uses both a session-level active set and entity heartbeat TTL keys.
+- Refresh-token replay protection uses `token_version`, per-token keys, and an index set.
+
+Project conventions
+- Session active entities key: `anima:session:{session_id}:active_entities`
+- Entity profile key: `anima:entity:{session_id}:{entity_id}`
+- Auth namespace prefix: `anima:auth:`
+
+Common pitfalls
+- Do not handcraft Redis keys in use cases; always go through repository or key helpers.
+- Clearing presence should also clear related heartbeat and auth state when required by the use case.
+- If a key shape changes, update tests under `backend/tests/infrastructure/test_redis_keys.py`.

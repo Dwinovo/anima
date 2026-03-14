@@ -1,0 +1,22 @@
+Alembic reference for this repo
+
+Library role
+- Alembic is the only approved path for Postgres schema changes.
+- Current dependency is `alembic>=1.18.4`.
+
+Core commands
+- `cd backend && uv run alembic current`
+- `cd backend && uv run alembic upgrade head`
+- `cd backend && uv run alembic downgrade -1`
+- `cd backend && uv run alembic revision --autogenerate -m "message"`
+
+Project patterns
+- Migration files live in `backend/alembic/versions/`.
+- Current head is `20260306_0005_add_actions_to_sessions`.
+- The active SQL table is currently `sessions`.
+- Migrations should reflect business intent in the filename, not generic wording.
+
+Common pitfalls
+- Never change production schema manually and then “backfill” a migration later.
+- Keep `upgrade()` and `downgrade()` symmetrical.
+- Update docs when head changes, especially `docs/design-docs/postgres-migrations.md` and `docs/generated/db-schema.md`.

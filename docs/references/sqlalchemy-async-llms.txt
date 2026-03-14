@@ -1,0 +1,23 @@
+SQLAlchemy async reference for this repo
+
+Library role
+- SQLAlchemy provides the Postgres control-plane model and async session lifecycle.
+- Current dependency is `sqlalchemy>=2.0.38`.
+
+Core APIs used here
+- `AsyncEngine`
+- `async_sessionmaker[AsyncSession]`
+- Declarative ORM via `Mapped` and `mapped_column`
+- SQL text execution for startup checks
+
+Project patterns
+- Define ORM models in `backend/src/infrastructure/persistence/postgres/models.py`.
+- Create engine and session factory during app lifespan startup.
+- Expose request-scoped sessions through `get_pg_session()` in dependencies.
+- Keep repository implementations under `backend/src/infrastructure/persistence/postgres/repositories/`.
+
+Common pitfalls
+- Do not pass ORM models into `backend/src/domain`; map them to domain entities first.
+- Do not create sessions ad hoc in route handlers.
+- If model fields change, add an Alembic migration and refresh `docs/generated/db-schema.md`.
+- Async SQLAlchemy failures should surface as application errors, not silent fallbacks.

@@ -1,0 +1,20 @@
+Mongo / Motor reference for this repo
+
+Library role
+- MongoDB stores full Event payloads that are too rich for graph-only storage.
+- Current dependency is `motor>=3.7.1`.
+
+Core patterns
+- Use `MongoManager` as the application-lifespan singleton.
+- Event payload repository lives in `backend/src/infrastructure/persistence/mongo/event_payload_repository.py`.
+- Collection name is centralized in `backend/src/infrastructure/persistence/mongo/collections.py`.
+- Neo4j keeps the graph skeleton; Mongo keeps the full event body.
+
+Project conventions
+- Primary collection: `event_payloads`
+- Typical payload fields: `session_id`, `event_id`, `world_time`, `verb`, `subject_uuid`, `target_ref`, `details`, `schema_version`
+
+Common pitfalls
+- Do not rely on Mongo as the Session source of truth; Postgres owns control-plane state.
+- Keep event write ordering consistent with the use case: Mongo first, then Neo4j.
+- If payload shape changes, update query assembly paths and docs.

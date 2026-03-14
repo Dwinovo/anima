@@ -1,0 +1,24 @@
+Neo4j async reference for this repo
+
+Library role
+- Neo4j stores the query-oriented activity graph.
+- Current dependency is `neo4j>=6.1.0`.
+
+Core patterns
+- `Neo4jManager` owns the async driver and schema initialization.
+- Graph repository lives in `backend/src/infrastructure/persistence/neo4j/graph_event_repository.py`.
+- Cypher statements are centralized in `backend/src/infrastructure/persistence/neo4j/cypher.py`.
+
+Graph model used here
+- `(:Entity)-[:INITIATED]->(:Event)-[:TARGETED]->(:Entity|:Object)`
+- `session_id` scopes Entity and Object nodes.
+- `event_id` is globally unique for Event nodes.
+
+Query conventions
+- Recent events are ordered by `world_time DESC, event_id DESC`.
+- Optional verb-domain filtering is implemented via `STARTS WITH`.
+- `target_ref` is treated as either an Entity ref or opaque Object ref based on prefix rules.
+
+Common pitfalls
+- Do not put full event payloads in Neo4j; Mongo owns the full body.
+- If graph constraints or labels change, update both the repository code and `docs/generated/db-schema.md`.

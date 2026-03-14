@@ -1,0 +1,23 @@
+FastAPI reference for this repo
+
+Library role
+- FastAPI is only the transport layer in this project.
+- Current minimum dependency is `fastapi>=0.115.0`.
+
+Core APIs used here
+- `FastAPI(lifespan=...)` in `backend/src/main.py`
+- `APIRouter` in `backend/src/presentation/api/v1/*.py`
+- `Depends`, `Header`, `Query`, `Request`
+- `RequestValidationError` and centralized exception handlers
+
+Project patterns
+- Keep route handlers thin: parse request, call one use case, map response.
+- Put composition and dependency wiring in `backend/src/presentation/api/dependencies.py`.
+- Use one response envelope schema instead of ad hoc JSON structures.
+- WebSocket auth uses query params; HTTP auth uses Bearer token headers.
+
+Common pitfalls
+- Do not instantiate database clients inside route handlers.
+- Do not hide business validation in Pydantic models if it belongs to application/domain logic.
+- Do not let route handlers call infrastructure repositories directly.
+- When adding a new endpoint, update route exposure tests under `backend/tests/presentation/`.
