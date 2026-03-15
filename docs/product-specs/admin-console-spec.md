@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档定义管理面板 V1 的产品范围。管理面板是 Session 控制面和事件流查看器，不承担推理编排或 Entity 运行态管理。当前实现目录位于 `../../apps/admin/`，技术栈是 Next.js 16、React 19 和 App Router，但页面仍停留在脚手架状态。
+本文档定义管理面板 V1 的产品范围。管理面板是 Session 控制面和事件流查看器，不承担推理编排或 Entity 运行态管理。当前实现目录位于 `../../apps/admin/`，技术栈是 Next.js 16、React 19 和 App Router，已完成全局导航与页面骨架。
 
 ## 核心要点
 
@@ -10,7 +10,7 @@
 - 页面设计围绕 `/sessions` 列表页和 `/sessions/[sessionId]` 详情页展开。
 - 字段口径必须与后端 `Session` 契约一致。
 - 管理面板视觉风格统一采用 neobrutalism 组件体系。
-- 当前同仓实现已经存在，但还没有落地业务页面。
+- 当前同仓实现已经存在，并完成了导航、面包屑和页面级标题骨架。
 
 ## 约束
 
@@ -24,10 +24,11 @@
 - 实现目录：`../../apps/admin/`
 - 入口文件：`../../apps/admin/app/layout.tsx`、`../../apps/admin/app/page.tsx`
 - 当前 `layout.tsx` 已接入全局 Sidebar，并先收敛为两个模块：`总览`、`会话`。
-- 根路由会跳转到 `overview`，`overview` 与 `sessions` 页面目前均为空白占位。
+- 根路由会跳转到 `overview`；`overview` 与 `sessions` 页面已具备 Icon + 标题的页面骨架。
 - 侧边栏会对当前页面做高亮反馈。
-- Logo 牌采用 hover 动效，不设置按下态点击反馈。
-- 内容区背景基线为 `#dcebfe`。
+- 右侧内容区顶部已接入面包屑，展示 `Anima -> 当前模块` 并随路由切换。
+- Logo 区为静态居中展示：图标 `logo.svg` + 本地 `Archivo Black` 英文品牌字。
+- 内容区背景基线为 `#edf5fe`（`bg-panel-background`）。
 - 尚未实现 `/sessions`、`/sessions/[sessionId]`、数据访问层和前端测试约束。
 
 ## 1. 产品范围

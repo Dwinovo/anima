@@ -4,12 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-body-local:
-    "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
-    system-ui, sans-serif;
-  --font-heading-local:
-    "Noto Serif CJK SC", "Songti SC", "STSong", "SimSun", serif;
   --background: oklch(93.46% 0.0305 255.11);
+  --panel-background: #edf5fe;
   --secondary-background: oklch(100% 0 0);
   --foreground: oklch(0% 0 0);
   --main-foreground: oklch(0% 0 0);
@@ -28,6 +24,7 @@
 
 .dark {
   --background: oklch(29.23% 0.0626 270.49);
+  --panel-background: oklch(34% 0.032 255);
   --secondary-background: oklch(23.93% 0 0);
   --foreground: oklch(92.49% 0 0);
   --main-foreground: oklch(0% 0 0);
@@ -44,10 +41,12 @@
 }
 
 @theme inline {
-  --font-base: var(--font-body-local);
-  --font-heading: var(--font-heading-local);
+  --font-sans: var(--font-noto-sans-sc);
+  --font-display: var(--font-noto-sans-sc);
+  --font-mono: var(--font-geist-mono);
   --color-main: var(--main);
   --color-background: var(--background);
+  --color-panel-background: var(--panel-background);
   --color-secondary-background: var(--secondary-background);
   --color-foreground: var(--foreground);
   --color-main-foreground: var(--main-foreground);
@@ -72,7 +71,11 @@
 
 @layer base {
   body {
-    @apply text-foreground font-base bg-background;
+    @apply bg-background text-foreground font-base font-sans;
+  }
+
+  html {
+    @apply font-sans;
   }
 
   h1,
@@ -82,38 +85,38 @@
   h5,
   h6 {
     @apply font-heading;
+    font-family: var(--font-display), sans-serif;
   }
 }
 
 @layer components {
   .type-title {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-family: var(--font-display), sans-serif;
   }
 
-  .logo-font-static {
-    font-family: var(--font-heading-local), "Noto Serif CJK SC", serif;
-    font-weight: 800;
-    -webkit-font-smoothing: subpixel-antialiased;
-    text-rendering: geometricPrecision;
-  }
-
-  .brandplate-hover-pop {
-    transform: translate3d(0, 0, 0);
+  .breadcrumb-title-hover {
+    display: inline-block;
     transition:
-      transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 120ms linear;
-    will-change: transform;
+      transform 150ms ease-out,
+      color 150ms ease-out,
+      text-shadow 150ms ease-out,
+      letter-spacing 150ms ease-out;
   }
 
-  .brandplate-hover-pop:hover {
-    transform: translate3d(-4px, -4px, 0);
-    box-shadow: 8px 8px 0 0 var(--border);
+  .breadcrumb-title-hover:hover {
+    transform: translate(-2px, -2px);
+    color: var(--main);
+    text-shadow: 2px 2px 0 var(--chart-3);
+    letter-spacing: 0.04em;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .brandplate-hover-pop {
-    transition: none;
+  .logo-text-archivo {
+    font-family: var(--font-archivo-black), sans-serif;
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
   }
+
 }

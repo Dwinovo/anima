@@ -28,6 +28,7 @@ export function AdminSidebarNav() {
             isActive={isOverviewActive}
             className={cn(
               navItemClass,
+              "text-sm",
               isOverviewActive && "bg-main text-main-foreground outline-border",
             )}
           >
@@ -43,6 +44,7 @@ export function AdminSidebarNav() {
             isActive={isSessionsActive}
             className={cn(
               navItemClass,
+              "text-sm",
               isSessionsActive && "bg-main text-main-foreground outline-border",
             )}
           >
